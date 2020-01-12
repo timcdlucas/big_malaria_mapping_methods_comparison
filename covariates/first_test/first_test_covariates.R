@@ -10,7 +10,9 @@
 #'geometry: margin=0.5in
 #'---
 
+#+ defs
 
+name <- 'first_test'
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
@@ -28,8 +30,10 @@ library(raster)
 library(imputeMissings)
 library(caret)
 
+source('../../helper_functions/summarise.R')
 
-#+ get_pr_data
+
+#+ get_pr_data, eval = FALSE
 
 pr <- getPR(country = 'all', species = 'pf')
 
@@ -91,7 +95,9 @@ covs_clean %>%
     facet_wrap(~ name)
 
 
+#+ write_covs
 
+write.csv(covs_clean, '../../../data/extracted_covs/first_test.csv')
 
 #+ create_random_holdout
 
@@ -130,7 +136,18 @@ pred_enet_r <- predict(m_enet_r, newdata = covs_clean[random_holdout == 1, ])
 
 summary_enet_r <- summarise(pr$positive[random_holdout == 1], 
                             pr$examined[random_holdout == 1],
-                            pred_enet_r)
+                            pred_enet_r,
+                            pr[random_holdout == 1, c('longitude', 'latitude')])
+
+summary <- data.frame(name = paste0(name, 'enet'), cv = 'random',
+                      mae = summary_enet_r$weighted_mae,
+                      correlation = summary_enet_r$correlation,
+                      time = m_enet_r$times$everything[[1]])
+
+write.csv(summary, 'random_enet_summary.csv')
+
+write.csv(summary_enet_r$errors, 'random_enet_errors.csv')
+
 
 
 #+ fit_enet_spatial
