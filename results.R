@@ -13,7 +13,7 @@
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(cache = FALSE, fig.width = 8, fig.height = 5)
 
 set.seed(110120)
 
