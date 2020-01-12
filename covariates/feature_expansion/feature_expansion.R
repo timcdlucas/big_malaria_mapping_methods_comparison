@@ -63,6 +63,9 @@ covs <- do.call(cbind, vals) %>% data.frame
 names(covs) <- sapply(r, names)
 
 
+
+
+
 #+ clean_covs
 
 sapply(covs, function(x) mean(is.na(x)))
@@ -70,11 +73,17 @@ sapply(covs, function(x) mean(is.na(x)))
 covs_clean <- impute(covs)
 covs_clean <- log1p(covs_clean)
 
+
 #+ feature_engineer
 
 covs_clean <- cbind(covs_clean, log(covs_clean - min(covs_clean) + 0.0001), covs_clean ^ 2)
 names(covs_clean) <- c(names(covs), paste0('log_', names(covs)), paste0('square_', names(covs))) 
 
+#+ add_table_covs
+
+covs_clean <- cbind(covs_clean, dplyr::select(pr, year_start, month_start))
+
+#+ combine
 covs_clean <- scale(covs_clean)
 covs_clean <- as.data.frame(covs_clean)
 

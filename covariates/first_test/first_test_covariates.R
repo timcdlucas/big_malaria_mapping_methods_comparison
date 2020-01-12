@@ -33,20 +33,6 @@ library(caret)
 source('../../helper_functions/summarise.R')
 
 
-#+ get_pr_data, eval = FALSE
-
-pr <- getPR(country = 'all', species = 'pf')
-
-pr <- 
-  pr %>% 
-    filter(!is.na(examined),
-           !is.na(positive),
-           !is.na(latitude),
-           !is.na(longitude))
-
-write.csv(pr, "../../../data/derived/malariaAtlas_pr.csv")
-
-
 #+ read_pr_data, eval = TRUE
 
 pr <- read.csv("../../../data/derived/malariaAtlas_pr.csv")
@@ -77,12 +63,21 @@ covs <- do.call(cbind, vals) %>% data.frame
 names(covs) <- sapply(r, names)
 
 
+
+
+
 #+ clean_covs
 
 sapply(covs, function(x) mean(is.na(x)))
 
 covs_clean <- impute(covs)
 covs_clean <- log1p(covs_clean)
+
+#+ add_table_covs
+
+covs_clean <- cbind(covs_clean, dplyr::select(pr, year_start, month_start))
+
+#+ combine
 covs_clean <- scale(covs_clean)
 covs_clean <- as.data.frame(covs_clean)
 
@@ -99,9 +94,7 @@ covs_clean %>%
 
 write.csv(covs_clean, '../../../data/extracted_covs/first_test.csv')
 
-#+ create_random_holdout
 
-random_holdout <- c(rep(0, floor(nrow(pr) * 0.8)), rep(1, ceiling(nrow(pr) * 0.2))) %>% sample
 
 
 #+ create_spatial_holdout
