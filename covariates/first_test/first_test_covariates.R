@@ -139,7 +139,10 @@ summary_enet_r <- summarise(pr$positive[random_holdout == 1],
                             pred_enet_r,
                             pr[random_holdout == 1, c('longitude', 'latitude')])
 
-summary <- data.frame(name = paste0(name, 'enet'), cv = 'random',
+summary <- data.frame(name = paste0(name, 'enet'), 
+                      covariates = name,
+                      method = 'enet',
+                      cv = 'random',
                       mae = summary_enet_r$weighted_mae,
                       correlation = summary_enet_r$correlation,
                       time = m_enet_r$times$everything[[1]])
@@ -159,10 +162,54 @@ write.csv(summary_enet_r$errors, 'random_enet_errors.csv')
 
 #'# Random forest
 
+
 #+ fit_rf_random
+
+tg <- expand.grid(mtry = c(3, 5, 7), 
+                  min.node.size = c(1, 5, 10, 20),  
+                  splitrule = 'variance')
+
+
+m_rf_r <- train(y = pr$pr[random_holdout == 0],
+                  x = covs_clean[random_holdout == 0, ],
+                  method = 'ranger', 
+                  weights = pr$examined[random_holdout == 0],
+                  tuneGrid = tg,
+                  metric = 'MAE',
+                  trControl = trainControl(method = 'cv', number = 5, 
+                                           selectionFunction = 'oneSE')
+                  )
+
+
+#+ summary_rf_random
+
+plot(m_rf_r)
+
 
 
 #+ predict_rf_random
+
+pred_rf_r <- predict(m_rf_r, newdata = covs_clean[random_holdout == 1, ])
+
+
+summary_rf_r <- summarise(pr$positive[random_holdout == 1], 
+                          pr$examined[random_holdout == 1],
+                          pred_rf_r,
+                          pr[random_holdout == 1, c('longitude', 'latitude')])
+
+summary <- data.frame(name = paste0(name, 'rf'), 
+                      covariates = name,
+                      method = 'rf',
+                      cv = 'random',
+                      mae = summary_rf_r$weighted_mae,
+                      correlation = summary_rf_r$correlation,
+                      time = m_rf_r$times$everything[[1]])
+
+write.csv(summary, 'random_rf_summary.csv')
+
+write.csv(summary_rf_r$errors, 'random_rf_errors.csv')
+
+
 
 
 #+ fit_rf_spatial
