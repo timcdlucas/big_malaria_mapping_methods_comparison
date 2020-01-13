@@ -15,14 +15,18 @@
 knitr::opts_chunk$set(cache = FALSE, fig.width = 8, fig.height = 5)
 set.seed(1122)
 
+library(readr)
+library(dplyr)
+library(ggplot2)
+
 #+ get_pr_data, eval = TRUE
 
-pr <- getPR(country = 'all', species = 'pf')
+pr <- read_csv('../data/PfPR/pfpr.csv')
 
 pr <- 
   pr %>% 
     filter(!is.na(examined),
-           !is.na(positive),
+           !is.na(pf_pos),
            !is.na(latitude),
            !is.na(longitude))
 
@@ -35,7 +39,9 @@ random_holdout <- c(rep(0, floor(nrow(pr) * 0.8)), rep(1, ceiling(nrow(pr) * 0.2
 
 #+ create_spatial_holdout
 
-spatial_folds <- kmeans(pr[, c('longitude', 'latitude')], 12)$cluster
+spatial_folds <- kmeans(pr[, c('longitude', 'latitude')], 20)$cluster
+
+table(spatial_folds)
 
 WorldData <- map_data('world') %>% filter(region != "Antarctica") %>% fortify
 
@@ -51,7 +57,7 @@ cbind(pr, cluster = factor(spatial_folds)) %>%
     theme_minimal()
 
 
-spatial_holdout <- spatial_folds %in% c(6, 4, 1)
+spatial_holdout <- spatial_folds %in% c(3, 10, 19)
 cbind(pr, cluster = factor(spatial_holdout)) %>% 
   ggplot(aes(x = longitude, y = latitude, colour = cluster)) + 
   geom_map(data = WorldData, map = WorldData,
