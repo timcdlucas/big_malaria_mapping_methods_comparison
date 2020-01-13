@@ -32,7 +32,7 @@ extract_year_month <- function (coords, data_year, data_month, files, year_vec, 
   val_list <- mclapply(seq_len(nrow(unq)), ext, mc.cores = detectCores())
   
   # For each unique month year combination, read that raster and extract.
-  for(u in length(val_list)){
+  for(u in seq_along(val_list)){
     # Extract
     cov[data_year == unq$data_year[u] & data_month == unq$data_month[u]] <-
       val_list[[u]]
