@@ -34,6 +34,7 @@ library(raster)
 library(imputeMissings)
 library(stringr)
 library(parallel)
+library(caret)
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -88,7 +89,7 @@ covs_clean <- impute(covs)
 
 covs_clean <- cbind(covs_clean, dplyr::select(pr, year_start, month_start))
 
-#+ combine
+#+ combine, eval = FALSE
 covs_clean <- scale(covs_clean)
 covs_clean <- as.data.frame(covs_clean)
 
@@ -117,7 +118,8 @@ covs_clean %>%
 #+ create_spatial_holdout
 
 
-#' Elastic net
+#' # Elastic net
+#' ## Random CV
 
 
 #+ fit_enet_random
@@ -128,7 +130,7 @@ m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   weights = pr$examined[pr$random_holdout == 0],
                   tuneLength = 10,
                   metric = 'MAE',
-                  trControl = trainControl(method = 'cv', number = 5, 
+                  trControl = trainControl(method = 'boot632', number = 3, 
                                            selectionFunction = 'oneSE')
                   )
 
@@ -162,21 +164,51 @@ write.csv(summary, 'random_enet_summary.csv')
 write.csv(summary_enet_r$errors, 'random_enet_errors.csv')
 
 
+#' ## Spatial CV
 
 #+ fit_enet_spatial
 
+m_enet_s <- train(y = pr$pf_pr[pr$spatial_holdout == 0],
+                  x = covs_clean[pr$spatial_holdout == 0, ],
+                  method = 'enet', 
+                  weights = pr$examined[pr$spatial_holdout == 0],
+                  tuneLength = 10,
+                  metric = 'MAE',
+                  trControl = trainControl(method = 'boot632', number = 3, 
+                                           selectionFunction = 'oneSE')
+)
 
 #+ predict_enet_spatial
 
+pred_enet_s <- predict(m_enet_s, newdata = covs_clean[pr$spatial_holdout == 1, ])
+
+
+summary_enet_s <- summarise(pr$pf_pos[pr$spatial_holdout == 1], 
+                            pr$examined[pr$spatial_holdout == 1],
+                            pred_enet_s,
+                            pr[pr$spatial_holdout == 1, c('longitude', 'latitude')])
+
+summary <- data.frame(name = paste0(name, 'enet'), 
+                      covariates = name,
+                      method = 'enet',
+                      cv = 'spatial',
+                      mae = summary_enet_s$weighted_mae,
+                      correlation = summary_enet_s$correlation,
+                      time = m_enet_s$times$everything[[1]])
+
+write.csv(summary, 'spatial_enet_summary.csv')
+
+write.csv(summary_enet_s$errors, 'spatial_enet_errors.csv')
 
 
 #'# Random forest
+#' ## Random CV
 
 
-#+ fit_rf_random
+#+ fit_rf_random, eval = TRUE
 
-tg <- expand.grid(mtry = c(3, 5, 7), 
-                  min.node.size = c(1, 5, 10, 20),  
+tg <- expand.grid(mtry = c(7, 12, 17), 
+                  min.node.size = c(5, 20, 50),  
                   splitrule = 'variance')
 
 
@@ -186,7 +218,7 @@ m_rf_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   weights = pr$examined[pr$random_holdout == 0],
                   tuneGrid = tg,
                   metric = 'MAE',
-                  trControl = trainControl(method = 'cv', number = 5, 
+                  trControl = trainControl(method = 'boot632', number = 3, 
                                            selectionFunction = 'oneSE')
                   )
 
@@ -221,21 +253,60 @@ write.csv(summary_rf_r$errors, 'random_rf_errors.csv')
 
 
 
+#' ## Spatial CV
 
-#+ fit_rf_spatial
+
+#+ fit_rf_spatial, eval = TRUE
+
+m_rf_s <- train(y = pr$pf_pr[pr$spatial_holdout == 0],
+                x = covs_clean[pr$spatial_holdout == 0, ],
+                method = 'ranger', 
+                weights = pr$examined[pr$spatial_holdout == 0],
+                tuneGrid = tg,
+                metric = 'MAE',
+                trControl = trainControl(method = 'boot632', number = 3, 
+                                         selectionFunction = 'oneSE', allowParallel = FALSE)
+)
+
+
+#+ summary_rf_spatial
+
+plot(m_rf_s)
 
 
 #+ predict_rf_spatial
 
+pred_rf_s <- predict(m_rf_s, newdata = covs_clean[pr$spatial_holdout == 1, ])
+
+summary_rf_s <- summarise(pr$pf_pos[pr$spatial_holdout == 1], 
+                          pr$examined[pr$spatial_holdout == 1],
+                          pred_rf_s,
+                          pr[pr$spatial_holdout == 1, c('longitude', 'latitude')])
+
+summary <- data.frame(name = paste0(name, 'rf'), 
+                      covariates = name,
+                      method = 'rf',
+                      cv = 'spatial',
+                      mae = summary_rf_s$weighted_mae,
+                      correlation = summary_rf_s$correlation,
+                      time = m_rf_s$times$everything[[1]])
+
+write.csv(summary, 'spatial_rf_summary.csv')
+
+write.csv(summary_rf_s$errors, 'spatial_rf_errors.csv')
+
+
 
 
 #'# mbg
+#' ## Random CV
 
 #+ fit_mbg_random
 
 
 #+ predict_mbg_random
 
+#' ## Spatial CV
 
 #+ fit_mbg_spatial
 
@@ -244,6 +315,7 @@ write.csv(summary_rf_r$errors, 'random_rf_errors.csv')
 
 
 #'# Stacked generalisation
+#' ## Random CV
 
 #+ fit_stackgen_random
 
@@ -254,6 +326,7 @@ write.csv(summary_rf_r$errors, 'random_rf_errors.csv')
 #+ fit_stackgen_spatial
 
 
+#' ## Spatial CV
 #+ predict_stackgen_spatial
 
 
