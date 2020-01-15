@@ -94,7 +94,7 @@ prev_stand <- convertPrevalence(pr$pf_pr,
                                 standardisePR[1],
                                 standardisePR[2],
                                 parameters = standardisePars)
-pr$pr_pf <- prev_stand
+pr$pf_pr <- prev_stand
 
 anyNA(pr$pr_pf)
 

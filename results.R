@@ -42,6 +42,12 @@ data %>%
 
 
 
+data %>% 
+  filter(cv == 'spatial') %>% 
+  ggplot(aes(x = covariates, fill = method, y = mae)) + 
+    geom_bar(stat = 'identity', position = 'dodge')
+
+
 
 #'# Models
 
