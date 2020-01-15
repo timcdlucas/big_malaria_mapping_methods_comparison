@@ -26,7 +26,7 @@ library(ggplot2)
 #+ data
 
 pr <- fread("../data/derived/malariaAtlas_pr.csv")
-
+pr <- pr %>% filter(continent == 'Africa')
 
 #+ build_outline
 
@@ -42,8 +42,8 @@ plot(outline.hull$loc, type = 'l')
 
 mesh <- inla.mesh.2d(pr[, c('longitude', 'latitude')], 
                      boundary = outline.hull,
-                     max.edge = c(0.9, 20), 
-                     cutoff = 0.9, 
+                     max.edge = c(0.6, 20), 
+                     cutoff = 0.6, 
                      min.angle = 21, 
                      offset = c(0.1, 30))
 
@@ -65,7 +65,7 @@ autoplot(mesh) +
   geom_map(data = WorldData, map = WorldData,
              aes(x = long, y = lat, group = group, map_id=region),
              fill = NA, colour = "red", size=0.5) + 
-    xlim(-90, 190) + 
+    xlim(-30, 60) + 
     ylim(-50, 50) + 
     coord_equal() + 
     theme_minimal()

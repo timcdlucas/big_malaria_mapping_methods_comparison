@@ -40,7 +40,7 @@ random_holdout <- c(rep(0, floor(nrow(pr) * 0.8)), rep(1, ceiling(nrow(pr) * 0.2
 
 #+ create_spatial_holdout
 
-spatial_folds <- kmeans(pr[, c('longitude', 'latitude')], 20)$cluster
+spatial_folds <- kmeans(pr[, c('longitude', 'latitude')], 10)$cluster
 
 table(spatial_folds)
 
@@ -52,7 +52,7 @@ cbind(pr, cluster = factor(spatial_folds)) %>%
            aes(x = long, y = lat, group = group, map_id=region),
            fill = NA, colour = "#7f7f7f", size=0.5) + 
   geom_point() +
-  xlim(-80, 180) + 
+  xlim(-20, 80) + 
   ylim(-35, 40) + 
   coord_equal() + 
   theme_minimal()
@@ -65,7 +65,7 @@ cbind(pr, cluster = factor(spatial_holdout)) %>%
            aes(x = long, y = lat, group = group, map_id=region),
            fill = NA, colour = "#7f7f7f", size=0.5) + 
   geom_point() +
-  xlim(-80, 180) + 
+  xlim(-20, 80) + 
   ylim(-35, 40) + 
   coord_equal() + 
   theme_minimal()
