@@ -286,7 +286,9 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
 #+ fit_mbg_random
 	
 fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
-form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1")) + ', fixed))
+h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
+form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + ', fixed))
+
 
 
 m1 <- inla(form, data = inla.stack.data(stk.env), 
