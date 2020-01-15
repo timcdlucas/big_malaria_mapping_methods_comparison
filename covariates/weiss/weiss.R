@@ -35,6 +35,7 @@ library(imputeMissings)
 library(stringr)
 library(parallel)
 library(caret)
+library(INLA)
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -112,10 +113,6 @@ covs_clean %>%
     facet_wrap(~ name, scale = 'free')
 
 
-
-
-
-#+ create_spatial_holdout
 
 
 #' # Elastic net
@@ -301,10 +298,44 @@ write.csv(summary_rf_s$errors, 'spatial_rf_errors.csv')
 #'# mbg
 #' ## Random CV
 
-#+ fit_mbg_random
 
+#+ setup_mbg_random
+
+load('../../../data/derived/mesh.RData')
+
+Aest <- inla.spde.make.A(mesh = mesh, loc = as.matrix(pr[, c('longitude', 'latitude')]))
+
+# Define penalised complexity priors for random field. 
+spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, prior.range = c(10, 0.01), prior.sigma = c(0.4, 0.01))
+
+
+stk.env <- inla.stack(tag = 'estimation', ## tag
+                      data = list(pf_pos = pr$pf_pos, examined = pr$examined),
+                      A = list(Aest, 1),  ## Projector matrix for space, fixed, then sum to one fixed.
+                      effects = list(space = seq_len(spde$n.spde), 
+                                     cbind(b0 = 1, covs_clean)))
+
+
+
+#+ fit_mbg_random
+	
+fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
+form <- as.formula(paste('pf_pos ~ b0 + 0 + f(space, model = spde) + ', fixed))
+
+m1 <- inla(form, data = inla.stack.data(stk.env), family = 'binomial', 
+           Ntrials = examined, 
+           control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.env)),
+           num.threads = 4)
+
+save(m1, file = 'models/inla1.RData')
 
 #+ predict_mbg_random
+
+m1$summary.random$space %>% 
+  cbind(mesh$loc) %>% 
+  ggplot(aes(`1`, `2`, colour = plogis(mean + m1$summary.fixed['b0', 'mean']))) + 
+    geom_point() + 
+    scale_colour_viridis_c()
 
 #' ## Spatial CV
 
