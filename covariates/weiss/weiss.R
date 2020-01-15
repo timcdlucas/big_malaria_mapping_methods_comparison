@@ -175,7 +175,7 @@ write.csv(summary_enet_r$errors, 'random_enet_errors.csv')
 #' ## Random CV
 
 
-#+ fit_rf_random, eval = FALSE
+#+ fit_rf_random
 
 tg <- expand.grid(mtry = c(7, 12, 17), 
                   min.node.size = c(5, 20, 50),  
@@ -194,13 +194,13 @@ m_rf_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
 save(m_rf_r, file = 'models/rf_r.RData')
 
 
-#+ summary_rf_random, eval = FALSE
+#+ summary_rf_random
 
 plot(m_rf_r)
 
 
 
-#+ predict_rf_random, eval = FALSE
+#+ predict_rf_random
 
 pred_rf_r <- predict(m_rf_r, newdata = covs_clean[pr$random_holdout == 1, ])
 
@@ -239,8 +239,6 @@ pr_inla <- pr
 pr_inla$pf_pos[pr_inla$random_holdout == 1] <- NA
 pr_inla$year_group <- as.numeric(cut(pr_inla$year_start, c(1999, 2005, 2010, 2015, 2030)))
 
-pr_inla <- pr_inla[1:400, ]
-
 
 
 
@@ -255,31 +253,8 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
                       data = list(pf_pos = pr_inla$pf_pos, examined = pr_inla$examined),
                       A = list(Aest, 1),  ## Projector matrix for space, fixed.
                       effects = list(field = field.indices,
-                                     cbind(b0 = 1, covs_clean[1:400, ])))
+                                     cbind(b0 = 1, covs_clean)))
 
-
-#stk.env <- inla.stack(tag = 'estimation', ## tag
-#                      data = list(pf_pos = pr_inla$pf_pos, examined = pr_inla$examined),
-#                      A = list(Aest, 1),  ## Projector matrix for space, fixed.
-#                      effects = list(c(field.indices, list(b0 = 1)),
-#                                     list(covs_clean[1:400, ])))
-
-
-#h.spec <- list(theta = list(prior = 'pccor1', param = c(0, 0.9)))
-## Model formula
-#formulae <- y ~ 0 + w + f(i, model = spde, group = i.group, 
-#  control.group = list(model = 'ar1', hyper = h.spec)) 
-# Model formula
-#formulae <- y ~ 0 + w + f(i, model = spde, group = i.group, 
-#  control.group = list(model = 'ar1', hyper = h.spec)) 
-# PC prior on the autoreg. param.
-#prec.prior <- list(prior = 'pc.prec', param = c(1, 0.01))
-# Model fitting
-#res <- inla(formulae,  data = inla.stack.data(sdat), 
-#  control.predictor = list(compute = TRUE,
-#    A = inla.stack.A(sdat)), 
-#  control.family = list(hyper = list(theta = prec.prior)), 
-#  control.fixed = list(expand.factor.strategy = 'inla'))
 
 
 
@@ -311,9 +286,9 @@ m1$summary.random$space %>%
 
 
 
-summary_mbg_r <- summarise(pr$pf_pos[1:400][pr_inla$random_holdout == 1], 
+summary_mbg_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
                           pr_inla$examined[pr_inla$random_holdout == 1],
-                          m1$summary.fitted$mean[1:400][is.na(pr_inla$pf_pos)],
+                          m1$summary.fitted$mean[is.na(pr_inla$pf_pos)],
                           pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
 
 summary <- data.frame(name = paste0(name, 'mbg'), 
