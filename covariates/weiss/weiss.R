@@ -104,6 +104,16 @@ write.csv(covs_clean, '../../../data/extracted_covs/weiss.csv')
 covs_clean <- fread('../../../data/extracted_covs/weiss.csv')
 covs_clean <- covs_clean %>% dplyr::select(-V1)
 
+
+#+ subset
+covs_clean <- covs_clean[pr$year_start >= 2000, ]
+pr <- pr %>% filter(year_start >= 2000)
+
+
+covs_clean <- covs_clean[pr$continent == 'Africa', ]
+pr <- pr %>% filter(continent == 'Africa')
+
+
 #+ basic_plots
 
 covs_clean %>% 
@@ -127,10 +137,10 @@ m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   weights = pr$examined[pr$random_holdout == 0],
                   tuneLength = 10,
                   metric = 'MAE',
-                  trControl = trainControl(method = 'boot632', number = 3, 
-                                           selectionFunction = 'oneSE')
+                  trControl = trainControl(method = 'boot632', number = 1)
                   )
 
+save(m_enet_r, file = 'models/enet_r.RData')
 
 #+ summary_enet_random
 
@@ -161,48 +171,11 @@ write.csv(summary, 'random_enet_summary.csv')
 write.csv(summary_enet_r$errors, 'random_enet_errors.csv')
 
 
-#' ## Spatial CV
-
-#+ fit_enet_spatial
-
-m_enet_s <- train(y = pr$pf_pr[pr$spatial_holdout == 0],
-                  x = covs_clean[pr$spatial_holdout == 0, ],
-                  method = 'enet', 
-                  weights = pr$examined[pr$spatial_holdout == 0],
-                  tuneLength = 10,
-                  metric = 'MAE',
-                  trControl = trainControl(method = 'boot632', number = 3, 
-                                           selectionFunction = 'oneSE')
-)
-
-#+ predict_enet_spatial
-
-pred_enet_s <- predict(m_enet_s, newdata = covs_clean[pr$spatial_holdout == 1, ])
-
-
-summary_enet_s <- summarise(pr$pf_pos[pr$spatial_holdout == 1], 
-                            pr$examined[pr$spatial_holdout == 1],
-                            pred_enet_s,
-                            pr[pr$spatial_holdout == 1, c('longitude', 'latitude')])
-
-summary <- data.frame(name = paste0(name, 'enet'), 
-                      covariates = name,
-                      method = 'enet',
-                      cv = 'spatial',
-                      mae = summary_enet_s$weighted_mae,
-                      correlation = summary_enet_s$correlation,
-                      time = m_enet_s$times$everything[[1]])
-
-write.csv(summary, 'spatial_enet_summary.csv')
-
-write.csv(summary_enet_s$errors, 'spatial_enet_errors.csv')
-
-
 #'# Random forest
 #' ## Random CV
 
 
-#+ fit_rf_random, eval = TRUE
+#+ fit_rf_random, eval = FALSE
 
 tg <- expand.grid(mtry = c(7, 12, 17), 
                   min.node.size = c(5, 20, 50),  
@@ -215,18 +188,19 @@ m_rf_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   weights = pr$examined[pr$random_holdout == 0],
                   tuneGrid = tg,
                   metric = 'MAE',
-                  trControl = trainControl(method = 'boot632', number = 3, 
-                                           selectionFunction = 'oneSE')
+                  trControl = trainControl(method = 'boot632', number = 1)
                   )
 
+save(m_rf_r, file = 'models/rf_r.RData')
 
-#+ summary_rf_random
+
+#+ summary_rf_random, eval = FALSE
 
 plot(m_rf_r)
 
 
 
-#+ predict_rf_random
+#+ predict_rf_random, eval = FALSE
 
 pred_rf_r <- predict(m_rf_r, newdata = covs_clean[pr$random_holdout == 1, ])
 
@@ -250,49 +224,6 @@ write.csv(summary_rf_r$errors, 'random_rf_errors.csv')
 
 
 
-#' ## Spatial CV
-
-
-#+ fit_rf_spatial, eval = TRUE
-
-m_rf_s <- train(y = pr$pf_pr[pr$spatial_holdout == 0],
-                x = covs_clean[pr$spatial_holdout == 0, ],
-                method = 'ranger', 
-                weights = pr$examined[pr$spatial_holdout == 0],
-                tuneGrid = tg,
-                metric = 'MAE',
-                trControl = trainControl(method = 'boot632', number = 3, 
-                                         selectionFunction = 'oneSE', allowParallel = FALSE)
-)
-
-
-#+ summary_rf_spatial
-
-plot(m_rf_s)
-
-
-#+ predict_rf_spatial
-
-pred_rf_s <- predict(m_rf_s, newdata = covs_clean[pr$spatial_holdout == 1, ])
-
-summary_rf_s <- summarise(pr$pf_pos[pr$spatial_holdout == 1], 
-                          pr$examined[pr$spatial_holdout == 1],
-                          pred_rf_s,
-                          pr[pr$spatial_holdout == 1, c('longitude', 'latitude')])
-
-summary <- data.frame(name = paste0(name, 'rf'), 
-                      covariates = name,
-                      method = 'rf',
-                      cv = 'spatial',
-                      mae = summary_rf_s$weighted_mae,
-                      correlation = summary_rf_s$correlation,
-                      time = m_rf_s$times$everything[[1]])
-
-write.csv(summary, 'spatial_rf_summary.csv')
-
-write.csv(summary_rf_s$errors, 'spatial_rf_errors.csv')
-
-
 
 
 #'# mbg
@@ -303,31 +234,70 @@ write.csv(summary_rf_s$errors, 'spatial_rf_errors.csv')
 
 load('../../../data/derived/mesh.RData')
 
-Aest <- inla.spde.make.A(mesh = mesh, loc = as.matrix(pr[, c('longitude', 'latitude')]))
+
+pr_inla <- pr
+pr_inla$pf_pos[pr_inla$random_holdout == 1] <- NA
+pr_inla$year_group <- as.numeric(cut(pr_inla$year_start, c(1999, 2005, 2010, 2015, 2030)))
+
+pr_inla <- pr_inla[1:400, ]
+
+
+
 
 # Define penalised complexity priors for random field. 
-spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, prior.range = c(10, 0.01), prior.sigma = c(0.4, 0.01))
-
+spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, 
+                            prior.range = c(10, 0.01), prior.sigma = c(0.4, 0.01))
+field.indices <- inla.spde.make.index("field", n.mesh = mesh$n, n.group = length(unique(pr_inla$year_group)))
+Aest <- inla.spde.make.A(mesh = mesh, loc = as.matrix(pr_inla[, c('longitude', 'latitude')]),
+                         group = pr_inla$year_group)
 
 stk.env <- inla.stack(tag = 'estimation', ## tag
-                      data = list(pf_pos = pr$pf_pos, examined = pr$examined),
-                      A = list(Aest, 1),  ## Projector matrix for space, fixed, then sum to one fixed.
-                      effects = list(space = seq_len(spde$n.spde), 
-                                     cbind(b0 = 1, covs_clean)))
+                      data = list(pf_pos = pr_inla$pf_pos, examined = pr_inla$examined),
+                      A = list(Aest, 1),  ## Projector matrix for space, fixed.
+                      effects = list(field = field.indices,
+                                     cbind(b0 = 1, covs_clean[1:400, ])))
+
+
+#stk.env <- inla.stack(tag = 'estimation', ## tag
+#                      data = list(pf_pos = pr_inla$pf_pos, examined = pr_inla$examined),
+#                      A = list(Aest, 1),  ## Projector matrix for space, fixed.
+#                      effects = list(c(field.indices, list(b0 = 1)),
+#                                     list(covs_clean[1:400, ])))
+
+
+#h.spec <- list(theta = list(prior = 'pccor1', param = c(0, 0.9)))
+## Model formula
+#formulae <- y ~ 0 + w + f(i, model = spde, group = i.group, 
+#  control.group = list(model = 'ar1', hyper = h.spec)) 
+# Model formula
+#formulae <- y ~ 0 + w + f(i, model = spde, group = i.group, 
+#  control.group = list(model = 'ar1', hyper = h.spec)) 
+# PC prior on the autoreg. param.
+#prec.prior <- list(prior = 'pc.prec', param = c(1, 0.01))
+# Model fitting
+#res <- inla(formulae,  data = inla.stack.data(sdat), 
+#  control.predictor = list(compute = TRUE,
+#    A = inla.stack.A(sdat)), 
+#  control.family = list(hyper = list(theta = prec.prior)), 
+#  control.fixed = list(expand.factor.strategy = 'inla'))
 
 
 
 #+ fit_mbg_random
 	
 fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
-form <- as.formula(paste('pf_pos ~ b0 + 0 + f(space, model = spde) + ', fixed))
+form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1")) + ', fixed))
 
-m1 <- inla(form, data = inla.stack.data(stk.env), family = 'binomial', 
-           Ntrials = examined, 
+
+m1 <- inla(form, data = inla.stack.data(stk.env), 
+           family = 'binomial', 
+           Ntrials = pr_inla$examined, 
            control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.env)),
-           num.threads = 4)
+           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'))
+
 
 save(m1, file = 'models/inla1.RData')
+
 
 #+ predict_mbg_random
 
@@ -337,29 +307,30 @@ m1$summary.random$space %>%
     geom_point() + 
     scale_colour_viridis_c()
 
-#' ## Spatial CV
-
-#+ fit_mbg_spatial
 
 
-#+ predict_mbg_spatial
+summary_mbg_r <- summarise(pr$pf_pos[1:400][pr_inla$random_holdout == 1], 
+                          pr_inla$examined[pr_inla$random_holdout == 1],
+                          m1$summary.fitted$mean[1:400][is.na(pr_inla$pf_pos)],
+                          pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
 
+summary <- data.frame(name = paste0(name, 'mbg'), 
+                      covariates = name,
+                      method = 'mbg',
+                      cv = 'random',
+                      mae = summary_mbg_r$weighted_mae,
+                      correlation = summary_mbg_r$correlation,
+                      time = m1$cpu.used[[2]])
 
-#'# Stacked generalisation
-#' ## Random CV
+write.csv(summary, 'random_mbg_summary.csv')
 
-#+ fit_stackgen_random
+write.csv(summary_rf_r$errors, 'random_mbg_errors.csv')
 
+#' next bits
 
-#+ predict_stackgen_random
+#+ ses
 
-
-#+ fit_stackgen_spatial
-
-
-#' ## Spatial CV
-#+ predict_stackgen_spatial
-
+sessionInfo()
 
 
 
