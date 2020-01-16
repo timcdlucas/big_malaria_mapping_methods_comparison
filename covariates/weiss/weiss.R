@@ -278,17 +278,10 @@ save(m1, file = 'models/inla1.RData')
 
 #+ predict_mbg_random
 
-m1$summary.random$space %>% 
-  cbind(mesh$loc) %>% 
-  ggplot(aes(`1`, `2`, colour = plogis(mean + m1$summary.fixed['b0', 'mean']))) + 
-    geom_point() + 
-    scale_colour_viridis_c()
-
-
 
 summary_mbg_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
                           pr_inla$examined[pr_inla$random_holdout == 1],
-                          m1$summary.fitted$mean[is.na(pr_inla$pf_pos)],
+                          m1$summary.fitted$mean[1:nrow(pr_inla)][is.na(pr_inla$pf_pos)],
                           pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
 
 summary <- data.frame(name = paste0(name, 'mbg'), 
