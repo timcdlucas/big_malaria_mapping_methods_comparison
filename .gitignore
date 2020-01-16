@@ -4,4 +4,6 @@
 *.pdf
 *.log
 *_cache/
-
+archive/
+*.RData
+*.Rhistory
