@@ -24,7 +24,7 @@ library(readr)
 
 #'# Covariates
 
-#+ read_summaries
+#+ read_summaries, warning = FALSE, results = 'hide', message = FALSE
 
 files <- list.files('covariates', recursive = TRUE, pattern = '_summary.csv', full.names = TRUE)
 
@@ -42,6 +42,7 @@ data %>%
 
 
 
+#+ spatial, eval = FALSE
 data %>% 
   filter(cv == 'spatial') %>% 
   ggplot(aes(x = covariates, fill = method, y = mae)) + 
