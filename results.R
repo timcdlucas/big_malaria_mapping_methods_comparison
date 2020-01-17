@@ -23,6 +23,13 @@ library(ggplot2)
 library(readr)
 library(knitr)
 library(forcats)
+library(broom)
+library(sjstats)
+
+#+ read_in_pr
+pr <- fread("../data/derived/malariaAtlas_pr.csv")
+pr <- pr %>% filter(year_start >= 2000)
+pr <- pr %>% filter(continent == 'Africa')
 
 #'# Covariates
 
@@ -35,11 +42,11 @@ d <- lapply(files, read_csv)
 data <- do.call(rbind, d)
 
 
-files_big <- list.files('covariates', recursive = TRUE, pattern = '_errors.csv', full.names = TRUE)
+#files_big <- list.files('covariates', recursive = TRUE, pattern = '_errors.csv', full.names = TRUE)#
 
-d_big <- lapply(files, read_csv)
+#d_big <- lapply(files, read_csv)
 
-data_big <- do.call(rbind, d)
+#data_big <- do.call(rbind, d)
 
 
 
@@ -97,9 +104,8 @@ d <- lapply(files, read_csv)
 
 data_mod <- do.call(rbind, d)
 
-data_mod <- data %>% 
-              filter(covariates == 'base') %>% 
-              rbind(data_mod)
+data_mod <- data_mod %>% 
+              filter(covariates == 'base')
 
 
 #+ read_error
@@ -109,7 +115,9 @@ files_big <- list.files('models', recursive = TRUE, pattern = '_errors.csv', ful
 
 d_big <- lapply(files_big, read_csv)
 
-data_big <- do.call(rbind, d)
+data_big <- do.call(rbind, d_big)
+data_big <- cbind(data_big, examined = pr$examined[pr$random_holdout == 1])
+
 
 
 #+ plots_models
@@ -124,13 +132,26 @@ data_mod %>%
 
 #+ table_mod
 
+best_model <- data_mod$method[which.min(data_mod$mae)]
+best_errors <- data_big$errors[data_big$method == best_model]
+data_mod$p_value <- NA
+method_vec <- unique(data_mod$method)
+
+for(i in seq_along(method_vec)){
+  if(method_vec[i] == best_model){
+    data_mod$p_value[i] <- NA
+  } else {
+    d <- data_big %>% filter(method %in% c(method_vec[i], best_model))
+    data_mod$p_value[i] <- wtd_mwu(d, errors, method, examined)$p.value
+  }
+}
 
 
 
 data_mod %>% 
   filter(cv == 'random') %>% 
   arrange(mae) %>% 
-  dplyr::select(-X1, -name, -cv, -time) %>% 
+  dplyr::select(method, mae, p_value, correlation) %>% 
   kable(caption = 'Table of results for varying methods',
         digits = 3)
 
