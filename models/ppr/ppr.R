@@ -4,8 +4,8 @@
 #'    number_sections: true
 #'    toc: true
 #'    toc_depth: 2
-#'    keep_tex: true
-#'title: "bart models"
+#'    keep_tex:  true
+#'title: "PPR models"
 #'author: Tim Lucas
 #'fontsize: 8pt
 #'geometry: margin=0.5in
@@ -13,7 +13,7 @@
 
 #+ defs
 
-name <- 'bart'
+name <- 'ppr'
 
 #' A fairly standard set of covariates
 #' Monthly data.
@@ -29,6 +29,7 @@ library(tidyr)
 library(ggplot2)
 library(data.table)
 
+library(knitr)
 library(imputeMissings)
 library(stringr)
 library(parallel)
@@ -71,58 +72,38 @@ covs_clean <-
          VIIRS = log1p(VIIRS))
 
 
-#+ setup_parallel, cache= FALSE
 
-
-
-
-#'# Base Data bart
+#'# Base Data
 #' ## Random CV
 
 
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
-options( java.parameters = "-Xmx48g" )
 
-N <- 20
-gr <- data.frame(num_trees = seq(30, 60, length.out = N), 
-                  k = runif(N, min = 0, max = 5),
-                  alpha = runif(N, min = .9, max = 1),
-                  beta = runif(N, min = 0, max = 4),
-                  nu = runif(N, min = 0, max = 5))
+cl <- makeForkCluster(10)
+registerDoParallel(cl)
 
 
 m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
-                x = covs_clean[pr$random_holdout == 0, ],
-                method = 'bartMachine', 
-                weights = pr$examined[pr$random_holdout == 0],
-                tuneGrid = gr,
-                metric = 'MAE',
-                trControl = trainControl(method = 'cv', number = 3, 
-                                         search = 'random', 
-                                         selectionFunction = 'oneSE'),
-                mem_cache_for_speed = FALSE,
-                run_in_sample = FALSE,
-                serialize = TRUE
+                  x = covs_clean[pr$random_holdout == 0, ],
+                  method = 'ppr', 
+                  weights = pr$examined[pr$random_holdout == 0],
+                  tuneLength = 20,
+                  metric = 'MAE',
+                  trControl = trainControl(method = 'cv', number = 3, 
+                                           search = 'grid', 
+                                           selectionFunction = 'oneSE')
 )
 
 save(m_base_r, file = 'models/base_r.RData')
 
 
-
-
+stopCluster(cl)
 
 #+ summary_base_random, cache = FALSE
+kable(m_base_r$results[, seq_len(length(m_base_r$bestTune) + 3)], digits = 2)
 
-plot(m_base_r$results$MAE ~ m_base_r$results$num_trees)
-plot(m_base_r$results$MAE ~ m_base_r$results$beta)
-plot(m_base_r$results$MAE ~ m_base_r$results$nu)
-plot(m_base_r$results$MAE ~ m_base_r$results$alpha)
-plot(m_base_r$results$MAE ~ m_base_r$results$k)
-
-kable(m_base_r$results[, 1:8], digits = 2)
-
-#plot(m_base_r)
+plot(m_base_r)
 
 
 
@@ -131,9 +112,9 @@ pred_base_r <- predict(m_base_r, newdata = covs_clean[pr$random_holdout == 1, ])
 
 
 summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
-                          pr$examined[pr$random_holdout == 1],
-                          pred_base_r,
-                          pr[pr$random_holdout == 1, c('longitude', 'latitude')])
+                            pr$examined[pr$random_holdout == 1],
+                            pred_base_r,
+                            pr[pr$random_holdout == 1, c('longitude', 'latitude')])
 
 summary <- data.frame(name = paste0('base', name), 
                       covariates = 'base',
@@ -145,7 +126,6 @@ summary <- data.frame(name = paste0('base', name),
 
 write.csv(summary, 'random_base_summary.csv')
 
-
 errors <- data.frame(name = paste0('base', name), 
                      covariates = 'base',
                      method = name,
@@ -153,7 +133,6 @@ errors <- data.frame(name = paste0('base', name),
                      errors = summary_base_r$errors)
 
 write.csv(errors, 'random_base_errors.csv')
-
 
 
 
