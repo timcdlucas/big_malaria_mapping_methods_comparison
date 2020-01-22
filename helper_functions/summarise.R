@@ -10,6 +10,7 @@ summarise <- function(positive, examined, pred, coords){
   abs_error <- abs(error)
 
   weighted_mae <- weighted.mean(abs_error, examined)
+  unweighted_mae <- mean(abs_error)
 
 
   # correlation
@@ -53,6 +54,7 @@ summarise <- function(positive, examined, pred, coords){
   # Combine outputs
 
   outs <- list(weighted_mae = weighted_mae, 
+               unweighted_mae = unweighted_mae,
                correlation = correlation,
                errors = abs_error)
 
