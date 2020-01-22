@@ -89,8 +89,8 @@ covs_clean <-
 cl <- makeForkCluster(10)
 registerDoParallel(cl)
 
-gr <- expand.grid(size = c(3, 5, 10, 15, 25), 
-              decay = c(0, 10 ^ seq(-1, -4, length = 6)))
+gr <- expand.grid(size = c(5, 10, 15, 20, 40, 60, 80), 
+              decay = c(0, 10 ^ seq(-1, -4, length = 5)))
 
 
 m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
@@ -100,8 +100,8 @@ m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                 tuneGrid = gr,
                 metric = 'MAE',
                 trControl = trainControl(method = 'cv', number = 3, 
-                                         search = 'grid', 
-                                         selectionFunction = 'oneSE'),
+                                         search = 'grid',
+                                         savePredictions = TRUE),
 linout = TRUE)
 
 save(m_base_r, file = 'models/base_r.RData')
