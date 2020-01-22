@@ -4,6 +4,7 @@
 #'    number_sections: true
 #'    toc: true
 #'    toc_depth: 2
+#'    keep_tex: true
 #'title: "Results"
 #'author: Tim Lucas
 #'fontsize: 8pt
@@ -25,6 +26,7 @@ library(knitr)
 library(forcats)
 library(broom)
 library(sjstats)
+library(data.table)
 
 #+ read_in_pr
 pr <- fread("../data/derived/malariaAtlas_pr.csv")
@@ -33,7 +35,7 @@ pr <- pr %>% filter(continent == 'Africa')
 
 #'# Covariates
 
-#+ read_summaries, warning = FALSE, results = 'hide', message = FALSE
+#+ read_summaries, results = 'hide', message = FALSE, warning = FALSE
 
 files <- list.files('covariates', recursive = TRUE, pattern = '_summary.csv', full.names = TRUE)
 
@@ -96,11 +98,20 @@ data %>%
 
 
 
-#+ read_model_summaries, warning = FALSE, results = 'hide', message = FALSE
+#+ read_model_summaries, results = 'hide', message = FALSE, warning = FALSE
 
 files <- list.files('models', recursive = TRUE, pattern = '_summary.csv', full.names = TRUE)
 
 d <- lapply(files, read_csv)
+
+
+rmae <- function(x){
+  if('unweighted_mae' %in% names(x)){
+    x <- dplyr::select(x, -unweighted_mae)
+  }
+  return(x)
+}
+d <- lapply(d, rmae)
 
 data_mod <- do.call(rbind, d)
 
@@ -108,7 +119,7 @@ data_mod <- data_mod %>%
               filter(covariates == 'base')
 
 
-#+ read_error
+#+ read_error, warning = FALSE, message = FALSE
 
 
 files_big <- list.files('models', recursive = TRUE, pattern = '_errors.csv', full.names = TRUE)
@@ -151,9 +162,18 @@ for(i in seq_along(method_vec)){
 data_mod %>% 
   filter(cv == 'random') %>% 
   arrange(mae) %>% 
-  dplyr::select(method, mae, p_value, correlation) %>% 
+  mutate(log10_p_value = log10(p_value)) %>% 
+  dplyr::select(method, mae, p_value, log10_p_value, correlation, time) %>% 
   kable(caption = 'Table of results for varying methods',
         digits = 3)
 
+
+data_mod %>% 
+  filter(cv == 'random') %>% 
+  arrange(mae) %>% 
+  mutate(log10_p_value = log10(p_value)) %>% 
+  dplyr::select(method, mae) %>% 
+  kable(caption = 'Table of results for varying methods',
+        digits = 3)
 
 
