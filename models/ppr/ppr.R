@@ -80,7 +80,7 @@ covs_clean <-
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
 
-cl <- makeForkCluster(10)
+cl <- makeForkCluster(16)
 registerDoParallel(cl)
 
 
@@ -92,7 +92,8 @@ m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   metric = 'MAE',
                   trControl = trainControl(method = 'cv', number = 3, 
                                            search = 'grid', 
-                                           selectionFunction = 'oneSE')
+                                           selectionFunction = 'oneSE',
+                                           savePredictions = TRUE)
 )
 
 save(m_base_r, file = 'models/base_r.RData')
@@ -121,6 +122,7 @@ summary <- data.frame(name = paste0('base', name),
                       method = name,
                       cv = 'random',
                       mae = summary_base_r$weighted_mae,
+                      unweighted_mae = summary_base_r$unweighted_mae,
                       correlation = summary_base_r$correlation,
                       time = m_base_r$times$everything[[1]])
 

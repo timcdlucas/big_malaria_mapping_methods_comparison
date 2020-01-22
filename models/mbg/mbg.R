@@ -145,7 +145,7 @@ save(m1, file = 'models/inla1.RData')
 #+ predict_base_random
 
 
-summary_mbg_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
+summary_base_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
                            pr_inla$examined[pr_inla$random_holdout == 1],
                            m1$summary.fitted$mean[1:nrow(pr_inla)][is.na(pr_inla$pf_pos)],
                            pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
@@ -184,31 +184,6 @@ autoplot(m1)
 kable(m1$summary.fixed)
 
 kable(m1$summary.hyper)
-
-#plot(m_base_r)
-
-
-
-#+ predict_base_random, cache = FALSE
-pred_base_r <- predict(m_base_r, newdata = covs_clean[pr$random_holdout == 1, ])
-
-
-summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
-                          pr$examined[pr$random_holdout == 1],
-                          pred_base_r,
-                          pr[pr$random_holdout == 1, c('longitude', 'latitude')])
-
-summary <- data.frame(name = paste0('base', name), 
-                      covariates = 'base',
-                      method = name,
-                      cv = 'random',
-                      mae = summary_base_r$weighted_mae,
-                      correlation = summary_base_r$correlation,
-                      time = m_base_r$times$everything[[1]])
-
-write.csv(summary, 'random_base_summary.csv')
-
-
 
 
 
