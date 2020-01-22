@@ -9,3 +9,4 @@ archive/
 *.Rhistory
 *.tex
 *.html
+*.DS_Store
