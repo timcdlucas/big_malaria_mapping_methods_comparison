@@ -20,7 +20,7 @@ name <- 'stacked_rf'
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, cache.lazy = TRUE,
+knitr::opts_chunk$set(cache = TRUE, cache.lazy = FALSE,
                       fig.width = 8, fig.height = 5)
 
 set.seed(110120)
