@@ -20,7 +20,8 @@ name <- 'ensemble'
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(cache = TRUE, cache.lazy = FALSE,
+                      fig.width = 8, fig.height = 5)
 
 set.seed(110120)
 
@@ -37,6 +38,8 @@ library(parallel)
 library(caret)
 library(doParallel)
 library(knitr)
+library(penalized)
+
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -63,10 +66,10 @@ pr <- pr %>% filter(continent == 'Africa')
 #+ read_in_models
 
 dirs <- c('../nnet', 
-          #'../rf', 
+          '../rf', 
           '../enet',
-          '../ppr')
-          #'../xgboost')
+          '../ppr',
+          '../xgboost')
 
 models <- list()
 weights <- rep(NA, length(dirs))
@@ -101,42 +104,34 @@ for(i in seq_along(dirs)){
 newdata <- do.call(cbind, newdata) %>% data.frame
 names(newdata) <- names(covs_clean)
 
-#+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
-
-
-cl <- makeForkCluster(16)
-registerDoParallel(cl)
-
-
-m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
-                  x = covs_clean,
-                  method = 'enet', 
-                  weights = pr$examined[pr$random_holdout == 0],
-                  tuneLength = 30,
-                  metric = 'MAE',
-                  trControl = trainControl(method = 'cv', number = 3, 
-                                           search = 'grid', 
-                                           selectionFunction = 'best',
-                                           savePredictions = TRUE),
-                  intercept = FALSE
-)
-
-save(m_base_r, file = 'models/base_r.RData')
-
-
-stopCluster(cl)
-
 
 
 #+ predict_base_random, cache = FALSE
+#m_base_r <- lm(pf_pr ~ 0 + V1 + V2 + V3 + V4 + V5,
+#              data = cbind(covs_clean,
+#                           pf_pr = pr$pf_pr[pr$random_holdout == 0]))
 
-pred_base_r <- predict(m_base_r, newdata = newdata)
+m_base_r <- penalized(pf_pr, ~ V1 + V2 + V3 + V4 + V5, ~ 0,
+                      positive = TRUE,
+                      data = cbind(covs_clean, 
+                                   pf_pr = pr$pf_pr[pr$random_holdout == 0]))
 
+
+data.frame(model = dirs %>% gsub('\\.\\.\\/', '', .),
+           weight = m_base_r@penalized) %>% 
+  kable(digits = 3)
+
+
+
+pred_base_r <- predict(m_base_r, penalized = newdata)[, 1]
+#pred_base_r <- predict(m_base_r, newdata = newdata)
 
 summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
                           pr$examined[pr$random_holdout == 1],
                           pred_base_r,
                           pr[pr$random_holdout == 1, c('longitude', 'latitude')])
+summary_base_r$weighted_mae
+
 
 summary <- data.frame(name = paste0('base', name), 
                       covariates = 'base',
@@ -146,10 +141,6 @@ summary <- data.frame(name = paste0('base', name),
                       unweighted_mae = summary_base_r$unweighted_mae,
                       correlation = summary_base_r$correlation,
                       time = NA)
-
-
-summary_base_r$unweighted_mae
-summary_base_r$weighted_mae
 
 
 write.csv(summary, 'random_base_summary.csv')
@@ -162,8 +153,6 @@ errors <- data.frame(name = paste0('base', name),
                      errors = summary_base_r$errors)
 
 write.csv(errors, 'random_base_errors.csv')
-
-summary_base_r$unweighted_mae
 
 
 #' next bits

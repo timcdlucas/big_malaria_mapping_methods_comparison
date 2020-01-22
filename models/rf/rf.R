@@ -95,7 +95,8 @@ m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                 trControl = trainControl(method = 'cv', number = 3, 
                                          search = 'random', 
                                          selectionFunction = 'oneSE',
-                                         allowParallel = FALSE))
+                                         allowParallel = FALSE,
+                                         savePredictions = TRUE))
 
 save(m_base_r, file = 'models/base_r.RData')
 
