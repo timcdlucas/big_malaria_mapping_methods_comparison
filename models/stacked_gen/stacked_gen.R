@@ -13,14 +13,15 @@
 
 #+ defs
 
-name <- 'mbg'
+name <- 'stacked_gen'
 
 #' A fairly standard set of covariates
 #' Monthly data.
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(cache = TRUE, cache.lazy = FALSE,
+                      fig.width = 8, fig.height = 5)
 
 set.seed(110120)
 
@@ -130,10 +131,9 @@ pr_inla$year_group <- as.numeric(cut(pr_inla$year_start, c(1999, 2005, 2010, 201
 
 covs_clean2 <- matrix(NA, nrow = nrow(pr), ncol = ncol(covs_clean)) %>% data.frame
 
-covs_clean2[pr$random_holdout == 1, ] 
-  <- newdata
-covs_clean2[pr$random_holdout == 0, ] 
-  <- covs_clean
+covs_clean2[pr$random_holdout == 1, ] <- newdata
+covs_clean2[pr$random_holdout == 0, ] <- covs_clean
+names(covs_clean2) <- names(covs_clean)
 
 
 # Define penalised complexity priors for random field. 
@@ -151,14 +151,15 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
 
 
 
-
 #+ fit_mbg_random
 
-fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
 h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
 
-
-form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + ', fixed))
+fixed_names <- names(covs_clean %>% dplyr::select(-contains('start')))
+fixed <- paste0('f(', fixed_names, ', model="clinear",range=c(0,Inf),initial=0)', collapse = ' + ')
+form <- as.formula(paste(
+  'pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + ', 
+  fixed))
 
 
 
@@ -166,7 +167,8 @@ m1 <- inla(form, data = inla.stack.data(stk.env),
            family = 'binomial', 
            Ntrials = pr_inla$examined, 
            control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.env)),
-           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'))
+           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'), 
+           num.threads = detectCores())
 
 
 save(m1, file = 'models/inla1.RData')
