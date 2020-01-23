@@ -36,12 +36,15 @@ library(stringr)
 library(parallel)
 library(knitr)
 
-library (INLA)
+library(INLA)
 library(INLAutils)
+library(readr)
 
 
 
 source('../../helper_functions/get_preds.R')
+source('../../helper_functions/summarise.R')
+
 
 if(!dir.exists('models')) dir.create('models')
 
@@ -186,8 +189,8 @@ summary <- data.frame(name = paste0('base', name),
                       covariates = 'base',
                       method = name,
                       cv = 'random',
-                      mae = summary_mbg_r$weighted_mae,
-                      correlation = summary_mbg_r$correlation,
+                      mae = summary_base_r$weighted_mae,
+                      correlation = summary_base_r$correlation,
                       time = m1$cpu.used[[2]])
 
 write.csv(summary, 'random_mbg_summary.csv')
