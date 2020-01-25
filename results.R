@@ -135,13 +135,17 @@ data_big <- cbind(data_big, examined = pr$examined[pr$random_holdout == 1])
 
 data_mod %>% 
   filter(cv == 'random') %>% 
-  ggplot(aes(x = fct_reorder(method, mae), y = mae)) + 
-    geom_bar(stat = 'identity', position = 'dodge')
+  ggplot(aes(x = fct_reorder(method, mae, .desc = TRUE), y = mae)) + 
+    geom_bar(stat = 'identity', position = 'dodge') +
+    coord_flip() + 
+    xlab('Model') +
+    ylab('Weighted MAE')
 
 
 
 
 #+ table_mod
+
 
 best_model <- data_mod$method[which.min(data_mod$mae)]
 best_errors <- data_big$errors[data_big$method == best_model]
