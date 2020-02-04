@@ -100,18 +100,27 @@ for(i in seq_along(mae_inner)){
               x = covs_clean,
               n = nrow(pr),
               m = ncol(covs_clean),
-              l1 = par_table$l1[i],
-              bw = 0.1,
+              l1 = 1e2,
+              bw = 0.01,
               k = par_table$k[i],
               omega = matrix(rnorm(par_table$k[i] * ncol(covs_clean)), ncol = ncol(covs_clean)))
   
-  fitmap = optimizing(m4, data = data)
+  fitmap <- optimizing(m4, data = data)
   ypredgp <- fitmap$par[grepl('fhat', names(fitmap$par))]
   
   ypred <- ypredgp + lm1$fitted.values
   
+  ggplot(data.frame(res=lm1$residuals, pred=ypredgp), aes(x = res, y = pred)) + 
+    geom_point() +
+    geom_smooth(method = 'lm')
+  
+  
   mae_inner[i] <- weighted.mean(abs(ypred - pr$pf_pr), weight = pr$examined)
   title <- paste0('k ', par_table$k[i], ', bw ', round(par_table$bw[i], 2), ', l1 ',  round(par_table$l1[i], 2), ', mae ', round(mae_inner[i], 2))
+  
+  plot(pr$pf_pr, lm1$fitted.values, main = 'lm')
+  plot(pr$pf_pr, ypredgp, main = 'gp')
+  
   plot(pr$pf_pr, ypred, main = title)
   
 }
