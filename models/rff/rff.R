@@ -87,7 +87,7 @@ covs_clean <-
 
 tic()
 Y <- as.matrix(pr$pf_pr[pr$random_holdout == 0])
-
+examined <- as.matrix(pr$examined[pr$random_holdout == 0])
 X <- as.matrix(covs_clean[pr$random_holdout == 0, ])
 K <- 500
 ncovs = ncol(X)
@@ -104,7 +104,8 @@ feat<-X %*% (omega * bw)
 
 rff <- sqrt(1 / K) * cbind(sin(feat), cos(feat))
 mu <- rff %*% W
-distribution(Y) <- normal(mu, sigma)
+prev <- ilogit(mu)
+distribution(Y) <- binomial(examined, prev)
 
 model <- model(W, tau, bw)
 
