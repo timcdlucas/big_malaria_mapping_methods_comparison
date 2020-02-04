@@ -36,6 +36,7 @@ library(parallel)
 library(greta)
 library(doParallel)
 library(knitr)
+library(tictoc)
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -84,7 +85,7 @@ covs_clean <-
 
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
-
+tic()
 Y <- as.matrix(pr$pf_pr[pr$random_holdout == 0])
 
 X <- as.matrix(covs_clean[pr$random_holdout == 0, ])
@@ -107,7 +108,10 @@ distribution(Y) <- normal(mu, sigma)
 
 model <- model(W, tau, bw)
 
-MAP <- opt(model, optimiser = adam())
+m_base_r <- opt(model, optimiser = adam())
+time <- toc()
+
+#+ summary_base_random, cache = FALSE
 
 
 Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>% 
@@ -116,7 +120,7 @@ Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>%
 featpred <- Xpred %*% (omega*bw)
 rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
 Ypred <- rffpred %*% W
-Ypred <- calculate(Ypred, MAP$par)
+Ypred <- calculate(Ypred, m_base_r$par)
 
 data.frame(Xpred, Y = Ypred) %>%
   ggplot(aes(Var1, Var2, fill = Y)) + 
@@ -130,7 +134,7 @@ Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>%
 featpred <- Xpred %*% (omega*bw)
 rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
 Ypred <- rffpred %*% W
-Ypred <- calculate(Ypred, MAP$par)
+Ypred <- calculate(Ypred, m_base_r$par)
 
 data.frame(Xpred, Y = Ypred) %>%
   ggplot(aes(Var1, Var2, fill = Y)) + 
@@ -151,25 +155,15 @@ save(m_base_r, file = 'models/base_r.RData')
 
 
 
-#+ summary_base_random, cache = FALSE
-
-
-m_base_r$results %>% 
-  dplyr::select(-RMSE, -Rsquared, -RMSESD, -MAESD, -RsquaredSD) %>% 
-  pivot_longer(-MAE) %>% 
-  ggplot(aes(x = value, y = MAE)) +
-    geom_point() + 
-    geom_smooth() + 
-    facet_wrap(~ name, scale = 'free')
-
-kable(arrange(m_base_r$results[, seq_len(length(m_base_r$bestTune) + 3)], desc(MAE)), digits = 2)
-
-#plot(m_base_r)
 
 
 
 #+ predict_base_random, cache = FALSE
-pred_base_r <- predict(m_base_r, newdata = covs_clean[pr$random_holdout == 1, ])
+Xpred <- covs_clean[pr$random_holdout == 1, ]
+featpred <- Xpred %*% (omega*bw)
+rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
+Ypred <- rffpred %*% W
+pred_base_r <- calculate(Ypred, m_base_r$par)
 
 
 summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
@@ -183,7 +177,7 @@ summary <- data.frame(name = paste0('base', name),
                       cv = 'random',
                       mae = summary_base_r$weighted_mae,
                       correlation = summary_base_r$correlation,
-                      time = m_base_r$times$everything[[1]])
+                      time = time$toc - time$tic)
 
 write.csv(summary, 'random_base_summary.csv')
 
