@@ -86,7 +86,7 @@ covs_clean <-
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
 tic()
-Y <- as.matrix(pr$pf_pr[pr$random_holdout == 0])
+Y <- as.matrix(pr$pf_pos[pr$random_holdout == 0])
 examined <- as.matrix(pr$examined[pr$random_holdout == 0])
 X <- as.matrix(covs_clean[pr$random_holdout == 0, ])
 K <- 500
@@ -120,8 +120,10 @@ Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>%
             as.matrix
 featpred <- Xpred %*% (omega*bw)
 rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
-Ypred <- rffpred %*% W
-Ypred <- calculate(Ypred, m_base_r$par)
+mupred <- rffpred %*% W
+prevpred <- ilogit(mupred)
+
+Ypred <- calculate(prevpred, m_base_r$par)
 
 data.frame(Xpred, Y = Ypred) %>%
   ggplot(aes(Var1, Var2, fill = Y)) + 
@@ -134,14 +136,17 @@ Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>%
   as.matrix
 featpred <- Xpred %*% (omega*bw)
 rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
-Ypred <- rffpred %*% W
-Ypred <- calculate(Ypred, m_base_r$par)
+
+mupred <- rffpred %*% W
+prevpred <- ilogit(mupred)
+
+Ypred <- calculate(prevpred, m_base_r$par)
 
 data.frame(Xpred, Y = Ypred) %>%
   ggplot(aes(Var1, Var2, fill = Y)) + 
   geom_tile()
 
-Ypred_insample <- calculate(mu, MAP$par)
+Ypred_insample <- calculate(prev, m_base_r$par)
 preds <- data.frame(obs = pr$pf_pr[pr$random_holdout == 0],
                     pred = Ypred_insample)
 ggplot(preds, aes(obs, pred)) + 
@@ -163,8 +168,9 @@ save(m_base_r, file = 'models/base_r.RData')
 Xpred <- covs_clean[pr$random_holdout == 1, ]
 featpred <- Xpred %*% (omega*bw)
 rffpred <- sqrt(1/K)*cbind(sin(featpred), cos(featpred))
-Ypred <- rffpred %*% W
-pred_base_r <- calculate(Ypred, m_base_r$par)
+mupred <- rffpred %*% W
+prevpred <- ilogit(mupred)
+pred_base_r <- calculate(prevpred, m_base_r$par)[, 1, drop = TRUE]
 
 
 summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
