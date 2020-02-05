@@ -5,7 +5,7 @@
 #'    toc: true
 #'    toc_depth: 2
 #'    keep_tex: true
-#'title: "nnet models"
+#'title: "GPs with random fourier features"
 #'author: Tim Lucas
 #'fontsize: 8pt
 #'geometry: margin=0.5in
@@ -20,7 +20,7 @@ name <- 'rff'
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5, cache.lazy = FALSE)
 
 set.seed(110120)
 
@@ -71,11 +71,8 @@ covs_clean <-
   covs_clean %>% 
   mutate(accessibility = log1p(accessibility),
          CHIRPS = log1p(CHIRPS),
-         VIIRS = log1p(VIIRS))
-
-
-#+ setup_parallel, cache= FALSE
-
+         VIIRS = log1p(VIIRS)) %>% 
+  mutate(latitude = pr$latitude, longitude = pr$longitude)
 
 
 
@@ -89,7 +86,7 @@ tic()
 Y <- as.matrix(pr$pf_pos[pr$random_holdout == 0])
 examined <- as.matrix(pr$examined[pr$random_holdout == 0])
 X <- as.matrix(covs_clean[pr$random_holdout == 0, ])
-K <- 500
+K <- 2500
 ncovs = ncol(X)
 
 
@@ -100,7 +97,7 @@ bw <- gamma(1,1)
 sigma <- gamma(1,1)
 
 W <- normal(0, 1, dim = c(2 * K, 1)) * tau
-feat<-X %*% (omega * bw)
+feat <- X %*% (omega * bw)
 
 rff <- sqrt(1 / K) * cbind(sin(feat), cos(feat))
 mu <- rff %*% W
@@ -112,8 +109,16 @@ model <- model(W, tau, bw)
 m_base_r <- opt(model, optimiser = adam())
 time <- toc()
 
+save(m_base_r, file = 'models/base_r.RData')
+
+
 #+ summary_base_random, cache = FALSE
 
+# Band width
+m_base_r$par$bw
+
+# Scale I think
+1 / m_base_r$par$bw
 
 Xpred <- expand.grid(rep(list(seq(-3, 3, 0.1)), 2)) %>% 
            cbind(matrix(0, nrow = nrow(.), ncol = ncovs - 2)) %>% 
@@ -156,7 +161,6 @@ ggplot(preds, aes(obs, pred)) +
 
 
 
-save(m_base_r, file = 'models/base_r.RData')
 
 
 
@@ -177,6 +181,8 @@ summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1],
                           pr$examined[pr$random_holdout == 1],
                           pred_base_r,
                           pr[pr$random_holdout == 1, c('longitude', 'latitude')])
+
+summary_base_r$weighted_mae
 
 summary <- data.frame(name = paste0('base', name), 
                       covariates = 'base',
