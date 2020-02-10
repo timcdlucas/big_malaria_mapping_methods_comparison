@@ -35,7 +35,7 @@ library(stringr)
 library(parallel)
 library(caret)
 library(INLA)
-library(binomTools)
+#library(binomTools)
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -119,21 +119,38 @@ data_wide <-
     pivot_wider(names_from = `Indicator Code`, values_from = interpolate, - c(`Indicator Name`, value, transform)) 
 
 
+#+ join_back
+
+wrld_covs <- 
+  pr %>% 
+    left_join(data_wide, by = c('country_id' = 'Country Code', 'year_start' = 'year_column')) %>% 
+    dplyr::select(SH.MED.CMHW.P3:SP.RUR.TOTL.ZS)
+
+
 #+ clean_covs
-sapply(covs, function(x) mean(is.na(x)))
+sapply(wrld_covs, function(x) mean(is.na(x)))
+
+wrld_covs <- wrld_covs[, -1]
+
+wrld_covs <- impute(wrld_covs)
+
+#+ combine, eval = FALSE
+wrld_covs <- scale(wrld_covs)
+wrld_covs <- as.data.frame(wrld_covs)
+
+#+ write_covs, eval = FALSE
+
+write.csv(covs_clean, '../../../data/extracted_covs/world_bank.csv')
 
 
-#+ write_covs, eval = TRUE
+#+ bind_covs, eval = FALSE
+covs_clean <- cbind(covs_clean, wrld_covs)
 
-write.csv(covs, paste0('../../../data/extracted_covs/', name, '.tif'))
 
+
+#+ fit_models
 
 if(!dir.exists('models')) dir.create('models')
-
-#+ add_table_covs
-
-covs_clean <- cbind(covs_clean, covs)
-
 
 
 #+ subset
@@ -143,6 +160,15 @@ pr <- pr %>% filter(year_start >= 2000)
 
 covs_clean <- covs_clean[pr$continent == 'Africa', ]
 pr <- pr %>% filter(continent == 'Africa')
+
+
+#+ trans
+
+covs_clean <-
+  covs_clean %>% 
+  mutate(accessibility = log1p(accessibility),
+         CHIRPS = log1p(CHIRPS),
+         VIIRS = log1p(VIIRS))
 
 
 #+ basic_plots
@@ -162,6 +188,9 @@ covs_clean %>%
 
 #+ fit_enet_random, cache = TRUE
 
+cl <- makeForkCluster(8)
+registerDoParallel(cl)
+
 m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   x = covs_clean[pr$random_holdout == 0, ],
                   method = 'enet', 
@@ -170,6 +199,7 @@ m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   metric = 'MAE',
                   trControl = trainControl(method = 'boot632', number = 1)
 )
+stopCluster(cl)
 
 save(m_enet_r, file = 'models/enet_r.RData')
 
