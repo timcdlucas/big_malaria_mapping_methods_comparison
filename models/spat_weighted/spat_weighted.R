@@ -83,9 +83,57 @@ covs_clean <-
 #' ## Random CV
 
 
+
+#+ inner_cv
+
+inner_holdout <- sample(which(pr$random_holdout == 0), 500)
+Nvec <- c(200, 500, 1000, 2000, 4000)
+mae <- rep(NA, length(Nvec))
+
+for(n in seq_along(Nvec)){
+  
+  N <- Nvec[n]
+  preds <- rep(NA, inner_holdout %>% length)
+  
+  for(i in seq_along(inner_holdout)){
+    
+    #print(i)
+    distances <- 
+      fields.rdist.near(
+        pr %>% slice(inner_holdout) %>% select(latitude, longitude)  %>% slice(i) %>% as.matrix,
+        pr %>% filter(random_holdout == 0) %>% select(latitude, longitude)  %>% as.matrix,
+        delta = 100,
+        max.points = 5e5)
+    
+    this_indices <- order(distances$ra)[seq(N)]
+    
+    this_pr <- pr[pr$random_holdout == 0, ][this_indices, ]
+    this_covs_clean <- covs_clean[pr$random_holdout == 0, ][this_indices, ]
+    
+    this_pr$weights <- this_pr$examined
+    
+    
+    d <- data.frame(pf_pr = this_pr$pf_pr, this_covs_clean)
+    this_model <- glm(pf_pr ~ ., data = d , weights = this_pr$weights, family = binomial())
+    
+    preds[i] <- predict(this_model, newdata = covs_clean[pr$random_holdout == 1, ][i, ], type = 'response')
+  }
+  
+  mae[n] <- abs(preds - pr$pf_pr)
+}
+
+
+plot(mae ~ Nvec)
+
+
+
+
+
+
+
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
-N <- 1000
+N <- Nvec[which.min(mae)]
 geo_weight <- FALSE
 preds <- rep(NA, pr$pf_pos[pr$random_holdout == 1] %>% length)
 m <- rep(list(NA), pr$pf_pos[pr$random_holdout == 1] %>% length)
