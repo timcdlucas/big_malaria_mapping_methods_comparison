@@ -71,6 +71,28 @@ Type objective_function<Type>::operator()()
   // Random effect parameters
   PARAMETER_VECTOR(nodemean);
   
+  
+  
+  // spatially varyin
+  
+  // spde hyperparameters
+  PARAMETER(log_covsigma);
+  PARAMETER(log_covrho);
+  Type covsigma = exp(log_covsigma);
+  Type covrho = exp(log_covrho);
+  
+  // Priors on spde hyperparameters
+  DATA_SCALAR(prior_covrho_min);
+  DATA_SCALAR(prior_covrho_prob);
+  DATA_SCALAR(prior_covsigma_max);
+  DATA_SCALAR(prior_covsigma_prob);
+  
+  // Convert hyperparameters to natural scale
+  Type covkappa = sqrt(8.0) / covrho;
+  
+  // Random effect parameters
+  PARAMETER_VECTOR(nodecov);
+  
   // Number of pixels
   int n_points = x.rows();
   
@@ -102,6 +124,29 @@ Type objective_function<Type>::operator()()
   // Likelihood of the random field.
   nll += SCALE(GMRF(Q), sigma / scaling_factor)(nodemean);
   
+  
+  
+  // likelihood of hyperpriors foer spatially varying
+  
+  // Likelihood of hyperparameters for field. 
+  // From https://www.tandfonline.com/doi/full/10.1080/01621459.2017.1415907 (Theorem 2.6)
+  Type covlambdatilde1 = -log(prior_covrho_prob) * prior_covrho_min;
+  Type covlambdatilde2 = -log(prior_covsigma_prob) / prior_covsigma_max;
+  Type log_covpcdensity = log(covlambdatilde1) + log(covlambdatilde2) - 2*log_covrho - covlambdatilde1 * pow(covrho, -1) - covlambdatilde2 * covsigma;
+  // log_rho and log_sigma from the Jacobian
+  nll -= log_covpcdensity + log_covrho + log_covsigma;
+  
+  // Build spde matrix
+  SparseMatrix<Type> covQ = Q_spde(spde, covkappa);
+  
+  // From Lindgren (2011) https://doi.org/10.1111/j.1467-9868.2011.00777.x, see equation for the marginal variance
+  Type covscaling_factor = sqrt(exp(lgamma(nu)) / (exp(lgamma(nu + 1)) * 4 * M_PI * pow(covkappa, 2*nu)));
+  
+  // Likelihood of the random field.
+  nll += SCALE(GMRF(covQ), covsigma / covscaling_factor)(nodecov);
+  
+  
+  
   Type nll_priors = nll;
   
   
@@ -113,6 +158,11 @@ Type objective_function<Type>::operator()()
   vector<Type> logit_prevalence_field;
   logit_prevalence_field = Apixel * nodemean;
   
+  // Calculate field for spatially varying
+  vector<Type> logit_cov_field;
+  logit_cov_field = Apixel * nodecov * x.col(0);
+  
+  
   // ------------------------------------------------------------------------ //
   // Likelihood from data
   // ------------------------------------------------------------------------ //
@@ -121,7 +171,9 @@ Type objective_function<Type>::operator()()
   vector<Type> pixel_pred(n_points);
   vector<Type> reportnll(n_points);
   
-  pixel_linear_pred = intercept + x * slope  + logit_prevalence_field.array();
+  pixel_linear_pred = intercept + x * slope + 
+                        logit_prevalence_field.array() +
+                        logit_cov_field.array();
   pixel_pred = invlogit(pixel_linear_pred);
   
   for (int point = 0; point < n_points; point++) {

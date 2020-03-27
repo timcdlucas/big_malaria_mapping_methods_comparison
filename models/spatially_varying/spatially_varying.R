@@ -138,7 +138,10 @@ parameters <- list(intercept = -5,
                    slope = rep(0, ncol(covs_clean)),
                    log_sigma = 0,
                    log_rho = 4,
-                   nodemean = rep(0, nrow(spde$M0))
+                   nodemean = rep(0, nrow(spde$M0)),
+                   log_covsigma = 0,
+                   log_covrho = 4,
+                   nodecov = rep(0, nrow(spde$M0))
                    
 )
 
@@ -151,10 +154,14 @@ input_data <- list(x = as.matrix(covs_clean[pr$random_holdout == 0, ]),
                    priorsd_intercept = 2,
                    priormean_slope = 0,
                    priorsd_slope = 0.1,
-                   prior_rho_min = 4,
-                   prior_rho_prob = 0.9,
-                   prior_sigma_max = 0.2,
-                   prior_sigma_prob = 0.99,
+                   prior_rho_min = 10,
+                   prior_rho_prob = 0.01,
+                   prior_sigma_max = 0.4,
+                   prior_sigma_prob = 0.01,
+                   prior_covrho_min = 20,
+                   prior_covrho_prob = 0.01,
+                   prior_covsigma_max = 0.1,
+                   prior_covsigma_prob = 0.01,
                    nu = 1
                    
 )
