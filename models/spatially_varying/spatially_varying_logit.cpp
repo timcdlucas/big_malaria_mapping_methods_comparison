@@ -1,15 +1,18 @@
 //
-  // Author: Anita Nandi
-// Date: 2019-02-14
+// Author: Anita Nandi
+// Date: 2019-07-24
+//
+// Simple example of a TMB model - linear regression with field
+//
+// Data: prevalence survey data and covariate data
+//
+// The model: prev = invlogit(intercept + x * slope + logit_prevalence_field.array())
+//
 
-// Data: Spatial field mesh and matrices, polygon data, covariate pixel data
-
-
-#define TMB_LIB_INIT R_init_disaggregation
 #include <TMB.hpp>
 
 template <class Type>
-  Type objective_function<Type>::operator()()
+Type objective_function<Type>::operator()()
 {
   
   using namespace R_inla;
@@ -17,137 +20,108 @@ template <class Type>
   using namespace Eigen;
   
   // ------------------------------------------------------------------------ //
-    // Spatial field data
+  // Spatial field data
   // ------------------------------------------------------------------------ //
-    
-    // The A matrices are for projecting the mesh to a point for the pixel and point data respectively.
+  
+  // The A matrices are for projecting the mesh to a point for the pixel and point data respectively.
   DATA_SPARSE_MATRIX(Apixel);
   DATA_STRUCT(spde, spde_t);
   
   // ------------------------------------------------------------------------ //
-    // Polygon level data
+  // Input data
   // ------------------------------------------------------------------------ //
-    
-    // Covariate pixel data
+  
+  // Covariates: Environmental data
   DATA_MATRIX(x);
   
-  // Shape data. Cases and region id.
-  DATA_VECTOR(response_data);
-  DATA_VECTOR(response_sample_size);
+  // Response: Prevalence point data
+  DATA_VECTOR(positive_cases);
+  DATA_VECTOR(examined_cases);
   
-
   // ------------------------------------------------------------------------ //
-    // Parameters
+  // Parameters
   // ------------------------------------------------------------------------ //
-    
+  
   PARAMETER(intercept);
   PARAMETER_VECTOR(slope);
   
-  DATA_SCALAR(priormean_intercept);
-  DATA_SCALAR(priorsd_intercept);
-  DATA_SCALAR(priormean_slope);
-  DATA_SCALAR(priorsd_slope);
+  Type priormean_intercept = -4.0;
+  Type priorsd_intercept = 2.0; //priormean_intercept from data entry
+  Type priormean_slope = 0.0;
+  Type priorsd_slope = 0.5;
   
-  // Priors for likelihood
-  PARAMETER(log_tau_gaussian);
-  Type tau_gaussian = exp(log_tau_gaussian);
-  Type gaussian_sd = 1 / sqrt(tau_gaussian);
-  
-
   // spde hyperparameters
-  PARAMETER(log_sigma);
-  PARAMETER(log_rho);
-  Type sigma = exp(log_sigma);
-  Type rho = exp(log_rho);
+  PARAMETER(log_kappa);
+  PARAMETER(log_tau);
   
   // Priors on spde hyperparameters
-  DATA_SCALAR(prior_rho_min);
-  DATA_SCALAR(prior_rho_prob);
-  DATA_SCALAR(prior_sigma_max);
-  DATA_SCALAR(prior_sigma_prob);
+  Type priormean_log_kappa = -2;
+  Type priorsd_log_kappa = 0.1;
+  Type priormean_log_tau = -5;
+  Type priorsd_log_tau = 0.5;
   
   // Convert hyperparameters to natural scale
-  DATA_SCALAR(nu);
-  Type kappa = sqrt(8.0) / rho;
+  Type tau = exp(log_tau);
+  Type kappa = exp(log_kappa);
   
-  // Random effect parameters
   PARAMETER_VECTOR(nodemean);
   
-  // Model component flags
-  DATA_INTEGER(field);
-
-  // Number of pixels
-  int n_pixels = x.rows();
+  // Number of prev points
+  int n_points = positive_cases.size();
   
   Type nll = 0.0;
   
   // ------------------------------------------------------------------------ //
-    // Likelihood from priors
+  // Likelihood from priors
   // ------------------------------------------------------------------------ //
-    
-    nll -= dnorm(intercept, priormean_intercept, priorsd_intercept, true);
+  
+  nll -= dnorm(intercept, priormean_intercept, priorsd_intercept, true);
   for (int s = 0; s < slope.size(); s++) {
     nll -= dnorm(slope[s], priormean_slope, priorsd_slope, true);
   }
   
-  if(field) {
-    // Likelihood of hyperparameters for field. 
-    // From https://www.tandfonline.com/doi/full/10.1080/01621459.2017.1415907 (Theorem 2.6)
-    Type lambdatilde1 = -log(prior_rho_prob) * prior_rho_min;
-    Type lambdatilde2 = -log(prior_sigma_prob) / prior_sigma_max;
-    Type log_pcdensity = log(lambdatilde1) + log(lambdatilde2) - 2*log_rho - lambdatilde1 * pow(rho, -1) - lambdatilde2 * sigma;
-    // log_rho and log_sigma from the Jacobian
-    nll -= log_pcdensity + log_rho + log_sigma;
-    
-    // Build spde matrix
-    SparseMatrix<Type> Q = Q_spde(spde, kappa);
-    
-    // From Lindgren (2011) https://doi.org/10.1111/j.1467-9868.2011.00777.x, see equation for the marginal variance
-    Type scaling_factor = sqrt(exp(lgamma(nu)) / (exp(lgamma(nu + 1)) * 4 * M_PI * pow(kappa, 2*nu)));
-    
-    // Likelihood of the random field.
-    nll += SCALE(GMRF(Q), sigma / scaling_factor)(nodemean);
-  }
+  // Likelihood of hyperparameters for field
+  nll -= dnorm(log_kappa, priormean_log_kappa, priorsd_log_kappa, true);
+  nll -= dnorm(log_tau, priormean_log_tau, priorsd_log_tau, true);
   
-  Type nll_priors = nll;
+  // Build spde matrix
+  SparseMatrix<Type> Q = Q_spde(spde, kappa);
+  
+  // Likelihood of the random field.
+  nll += SCALE(GMRF(Q), 1.0 / tau)(nodemean);
+  
+  Type nllpriors = nll;
   
   // ------------------------------------------------------------------------ //
-    // Likelihood from data
+  // Calculate random field effects
   // ------------------------------------------------------------------------ //
-    
-  vector<Type> pixel_linear_pred(n_pixels);
-  pixel_linear_pred = intercept + x * slope;
-  pixel_linear_pred = invlogit(pixel_linear_pred);
   
+  // Calculate field for pixel data
+  vector<Type> logit_prevalence_field;
+  logit_prevalence_field = Apixel * nodemean;
   
-  if(field) {
-    // Calculate field for pixel data
-    vector<Type> linear_pred_field(n_pixels);
-    linear_pred_field = Apixel * nodemean;
-    pixel_linear_pred += linear_pred_field.array();
+  // ------------------------------------------------------------------------ //
+  // Likelihood from data
+  // ------------------------------------------------------------------------ //
+  
+  vector<Type> pixel_linear_pred(n_points);
+  vector<Type> pixel_pred(n_points);
+  vector<Type> reportnll(n_points);
+  
+  pixel_linear_pred = intercept + x * slope  + logit_prevalence_field.array();
+  pixel_pred = invlogit(pixel_linear_pred);
+  
+  for (int point = 0; point < n_points; point++) {
+    nll -= dbinom(positive_cases[point], examined_cases[point], pixel_pred[point], true);
+    reportnll[point] = -dbinom(positive_cases[point], examined_cases[point], pixel_pred[point], true);
   }
   
-
-  Type response;
-  vector<Type> pixel_pred;
-  vector<Type> reportprediction_rate(n_pixels);
-  vector<Type> reportnll(n_pixels);
-
-  // For each shape get pixel predictions within and aggregate to polygon level
-  for (int polygon = 0; polygon < n_pixels; polygon++) {
-    
-    nll -= dbinom(response_data[polygon], response_sample_size[polygon], pixel_pred[polygon], true);
-    reportnll[polygon] = -dbinom(response_data[polygon], response_sample_size[polygon], pixel_pred[polygon], true);
-    
-    
-  }
-  
-  REPORT(reportprediction_rate);
+  REPORT(pixel_pred);
   REPORT(reportnll);
-  REPORT(response_data);
-  REPORT(nll_priors);
+  REPORT(positive_cases);
+  REPORT(examined_cases);
+  REPORT(nllpriors);
   REPORT(nll);
-
+  
   return nll;
 }
-
