@@ -60,6 +60,9 @@ covs_clean <- covs_clean %>% dplyr::select(-V1)
 
 
 #+ subset
+
+
+
 covs_clean <- covs_clean[pr$year_start >= 2000, ]
 pr <- pr %>% filter(year_start >= 2000)
 
@@ -67,19 +70,17 @@ pr <- pr %>% filter(year_start >= 2000)
 covs_clean <- covs_clean[pr$continent == 'Africa', ]
 pr <- pr %>% filter(continent == 'Africa')
 
+ii <- sample(nrow(pr), 200)
 
+covs_clean <- covs_clean[ii, ]
+pr <- pr[ii, ]
 #+ trans
 
 covs_clean <-
   covs_clean %>% 
   mutate(accessibility = log1p(accessibility),
          CHIRPS = log1p(CHIRPS),
-         VIIRS = log1p(VIIRS)) %>%
-  mutate(month_start = pr$month_start) %>%
-  mutate(year_start = pr$year_start) %>% 
-  mutate(year_startrep = pr$year_start) %>% 
-  mutate(country = as.numeric(factor(pr$country)))
-  
+         VIIRS = log1p(VIIRS))
 
 #'# Base Data
 #' ## Random CV
@@ -111,25 +112,65 @@ plot(outline.hull$loc, type = 'l')
 
 mesh <- inla.mesh.2d(pr[, c('longitude', 'latitude')], 
                      boundary = outline.hull,
-                     max.edge = c(0.8, 20), 
-                     cutoff = 0.8, 
+                     max.edge = c(1, 20), 
+                     cutoff = 1, 
                      min.angle = 21, 
                      offset = c(0.1, 30))
 
 mesh$n
 
+spde <- (inla.spde2.matern(mesh, alpha = 2)$param.inla)[c("M0", "M1", "M2")]	
+
+coords <- 
+  pr %>% filter(random_holdout == 0) %>% select(longitude, latitude) %>% as.matrix
+Apix <- INLA::inla.mesh.project(mesh, loc = coords)$A
 
 
 
-#+ setup_tmb
+#+ setup_tmb, ache = FALSE
 
 compile('spatially_varying_logit.cpp')
 
 dyn.load(dynlib("spatially_varying_logit"))
 
 
+parameters <- list(intercept = -5,
+                   slope = rep(0, ncol(covs_clean)),
+                   log_sigma = 0,
+                   log_rho = 4,
+                   nodemean = rep(0, nrow(spde$M0))
+                   
+)
+
+input_data <- list(x = as.matrix(covs_clean[pr$random_holdout == 0, ]),
+                   Apixel = Apix,
+                   spde = spde,
+                   positive_cases = pr$pf_pos[pr$random_holdout == 0],
+                   examined_cases = pr$examined[pr$random_holdout == 0],
+                   priormean_intercept = -2,
+                   priorsd_intercept = 2,
+                   priormean_slope = 0,
+                   priorsd_slope = 0.1,
+                   prior_rho_min = 4,
+                   prior_rho_prob = 0.9,
+                   prior_sigma_max = 0.2,
+                   prior_sigma_prob = 0.99,
+                   nu = 1
+                   
+)
 
 #+ fit_tmb
+
+obj <- MakeADFun(
+  data = input_data, 
+  parameters = parameters,
+  random = c('nodemean'),
+  DLL = "spatially_varying_logit")
+
+its <- 1000
+opt <- nlminb(obj$par, obj$fn, obj$gr, 
+         control = list(iter.max = its, eval.max = 2*its, trace = 0))
+
 
 
 #+ predict_base_random

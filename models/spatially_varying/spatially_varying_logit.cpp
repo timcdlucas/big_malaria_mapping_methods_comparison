@@ -45,29 +45,34 @@ Type objective_function<Type>::operator()()
   PARAMETER(intercept);
   PARAMETER_VECTOR(slope);
   
-  Type priormean_intercept = -4.0;
-  Type priorsd_intercept = 2.0; //priormean_intercept from data entry
-  Type priormean_slope = 0.0;
-  Type priorsd_slope = 0.5;
+  // rgression priors
+  DATA_SCALAR(priormean_intercept);
+  DATA_SCALAR(priorsd_intercept);
+  DATA_SCALAR(priormean_slope);
+  DATA_SCALAR(priorsd_slope);
+  
   
   // spde hyperparameters
-  PARAMETER(log_kappa);
-  PARAMETER(log_tau);
+  PARAMETER(log_sigma);
+  PARAMETER(log_rho);
+  Type sigma = exp(log_sigma);
+  Type rho = exp(log_rho);
   
   // Priors on spde hyperparameters
-  Type priormean_log_kappa = -2;
-  Type priorsd_log_kappa = 0.1;
-  Type priormean_log_tau = -5;
-  Type priorsd_log_tau = 0.5;
+  DATA_SCALAR(prior_rho_min);
+  DATA_SCALAR(prior_rho_prob);
+  DATA_SCALAR(prior_sigma_max);
+  DATA_SCALAR(prior_sigma_prob);
   
   // Convert hyperparameters to natural scale
-  Type tau = exp(log_tau);
-  Type kappa = exp(log_kappa);
+  DATA_SCALAR(nu);
+  Type kappa = sqrt(8.0) / rho;
   
+  // Random effect parameters
   PARAMETER_VECTOR(nodemean);
   
-  // Number of prev points
-  int n_points = positive_cases.size();
+  // Number of pixels
+  int n_points = x.rows();
   
   Type nll = 0.0;
   
@@ -79,18 +84,26 @@ Type objective_function<Type>::operator()()
   for (int s = 0; s < slope.size(); s++) {
     nll -= dnorm(slope[s], priormean_slope, priorsd_slope, true);
   }
-  
-  // Likelihood of hyperparameters for field
-  nll -= dnorm(log_kappa, priormean_log_kappa, priorsd_log_kappa, true);
-  nll -= dnorm(log_tau, priormean_log_tau, priorsd_log_tau, true);
+
+  // Likelihood of hyperparameters for field. 
+  // From https://www.tandfonline.com/doi/full/10.1080/01621459.2017.1415907 (Theorem 2.6)
+  Type lambdatilde1 = -log(prior_rho_prob) * prior_rho_min;
+  Type lambdatilde2 = -log(prior_sigma_prob) / prior_sigma_max;
+  Type log_pcdensity = log(lambdatilde1) + log(lambdatilde2) - 2*log_rho - lambdatilde1 * pow(rho, -1) - lambdatilde2 * sigma;
+  // log_rho and log_sigma from the Jacobian
+  nll -= log_pcdensity + log_rho + log_sigma;
   
   // Build spde matrix
   SparseMatrix<Type> Q = Q_spde(spde, kappa);
   
-  // Likelihood of the random field.
-  nll += SCALE(GMRF(Q), 1.0 / tau)(nodemean);
+  // From Lindgren (2011) https://doi.org/10.1111/j.1467-9868.2011.00777.x, see equation for the marginal variance
+  Type scaling_factor = sqrt(exp(lgamma(nu)) / (exp(lgamma(nu + 1)) * 4 * M_PI * pow(kappa, 2*nu)));
   
-  Type nllpriors = nll;
+  // Likelihood of the random field.
+  nll += SCALE(GMRF(Q), sigma / scaling_factor)(nodemean);
+  
+  Type nll_priors = nll;
+  
   
   // ------------------------------------------------------------------------ //
   // Calculate random field effects
@@ -120,7 +133,7 @@ Type objective_function<Type>::operator()()
   REPORT(reportnll);
   REPORT(positive_cases);
   REPORT(examined_cases);
-  REPORT(nllpriors);
+  REPORT(nll_priors);
   REPORT(nll);
   
   return nll;
