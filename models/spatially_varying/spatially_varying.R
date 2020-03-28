@@ -199,6 +199,50 @@ covfield_ras <- rasterFromXYZ(cbind(coords_pred, covfield))
 plot(covfield_ras)
 
 
+cbind(pr, 
+      spat_var = extract(covfield_ras, as.matrix(pr[, c('longitude', 'latitude')])),
+      cov1 = covs_clean[, 1]) %>% 
+  mutate(spat_var1 = spat_var * cov1) %>% 
+  ggplot(aes(longitude, latitude, colour = spat_var1)) + 
+    geom_point(size = 3) +
+    scale_colour_viridis_c(limits = c(-2, 2), oob = scales::squish) + 
+    theme_minimal() +
+    coord_equal()
+
+
+
+cbind(pr, 
+      spat_var = extract(covfield_ras, as.matrix(pr[, c('longitude', 'latitude')])),
+      cov1 = covs_clean[, 1]) %>% 
+  mutate(spat_var1 = spat_var * cov1) %>%
+  mutate(total1 = spat_var1 + pars$slope[1] * cov1) %>% 
+  ggplot(aes(longitude, latitude, colour = total1)) + 
+    geom_point(size = 3) +
+    scale_colour_viridis_c(limits = c(-2, 3), oob = scales::squish) + 
+    theme_minimal() 
+    
+
+  
+
+cbind(pr, 
+      spat_var = extract(covfield_ras, as.matrix(pr[, c('longitude', 'latitude')])),
+      cov1 = covs_clean[, 1]) %>% 
+mutate(spat_var1 = spat_var * cov1) %>%
+mutate(total1 = spat_var1 + pars$slope[1] * cov1) %>% 
+ggplot(aes(total1, spat_var1, colour = pf_pr)) + 
+  geom_point()
+
+
+cbind(pr, 
+      spat_var = extract(covfield_ras, as.matrix(pr[, c('longitude', 'latitude')])),
+      cov1 = covs_clean[, 1]) %>% 
+  mutate(spat_var1 = spat_var * cov1) %>%
+  mutate(total1 = spat_var1 + pars$slope[1] * cov1,
+         cov1lin = pars$slope[1] * cov1) %>% 
+  ggplot(aes(total1, cov1lin, colour = pf_pr)) + 
+  geom_point()
+
+
 #+ predict_base_random
 
 
