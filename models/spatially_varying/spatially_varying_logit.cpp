@@ -158,9 +158,10 @@ Type objective_function<Type>::operator()()
   vector<Type> logit_prevalence_field;
   logit_prevalence_field = Apixel * nodemean;
   
+  
   // Calculate field for spatially varying
   vector<Type> logit_cov_field;
-  logit_cov_field = Apixel * nodecov * x.col(0);
+  logit_cov_field = Apixel * nodecov * x.col(0).array();
   
   
   // ------------------------------------------------------------------------ //
@@ -187,6 +188,8 @@ Type objective_function<Type>::operator()()
   REPORT(examined_cases);
   REPORT(nll_priors);
   REPORT(nll);
+  REPORT(logit_prevalence_field);
+  REPORT(logit_cov_field);
   
   return nll;
 }
