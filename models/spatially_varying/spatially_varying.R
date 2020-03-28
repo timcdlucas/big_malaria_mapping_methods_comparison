@@ -38,6 +38,7 @@ library(knitr)
 library (INLA)
 library(INLAutils)
 library(TMB)
+library(raster)
 
 
 
@@ -70,7 +71,7 @@ pr <- pr %>% filter(year_start >= 2000)
 covs_clean <- covs_clean[pr$continent == 'Africa', ]
 pr <- pr %>% filter(continent == 'Africa')
 
-ii <- sample(nrow(pr), 200)
+ii <- sample(nrow(pr), 1000)
 
 covs_clean <- covs_clean[ii, ]
 pr <- pr[ii, ]
@@ -171,13 +172,31 @@ input_data <- list(x = as.matrix(covs_clean[pr$random_holdout == 0, ]),
 obj <- MakeADFun(
   data = input_data, 
   parameters = parameters,
-  random = c('nodemean'),
+  random = c('nodemean', 'nodecov'),
   DLL = "spatially_varying_logit")
 
 its <- 1000
 opt <- nlminb(obj$par, obj$fn, obj$gr, 
          control = list(iter.max = its, eval.max = 2*its, trace = 0))
 
+
+#+ examined
+
+pars <- split(obj$env$last.par.best, names(obj$env$last.par.best))
+
+r <- raster('../../../data/covariates/housing/2019_Nature_Africa_Housing_2000.geotiff')
+raster_pts <- rasterToPoints(r, spatial = TRUE)
+coords_pred <- raster_pts@coords
+
+Amatrix <- inla.mesh.project(mesh, loc = as.matrix(coords_pred))$A
+
+field <- (Amatrix %*% pars$nodemean)[, 1]
+field_ras <- rasterFromXYZ(cbind(coords_pred, field))
+plot(field_ras)
+
+covfield <- (Amatrix %*% pars$nodecov)[, 1]
+covfield_ras <- rasterFromXYZ(cbind(coords_pred, covfield))
+plot(covfield_ras)
 
 
 #+ predict_base_random
