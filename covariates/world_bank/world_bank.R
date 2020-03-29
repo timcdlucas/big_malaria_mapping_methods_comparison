@@ -35,6 +35,7 @@ library(stringr)
 library(parallel)
 library(caret)
 library(INLA)
+library(doParallel)
 #library(binomTools)
 
 source('../../helper_functions/summarise.R')
@@ -188,8 +189,6 @@ covs_clean %>%
 
 #+ fit_enet_random, cache = TRUE
 
-cl <- makeForkCluster(8)
-registerDoParallel(cl)
 
 m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   x = covs_clean[pr$random_holdout == 0, ],
@@ -199,7 +198,6 @@ m_enet_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
                   metric = 'MAE',
                   trControl = trainControl(method = 'boot632', number = 1)
 )
-stopCluster(cl)
 
 save(m_enet_r, file = 'models/enet_r.RData')
 
@@ -233,8 +231,8 @@ write.csv(summary, 'random_enet_summary.csv')
 errors <- data.frame(name = paste0(name, 'enet'), 
                      covariates = name,
                      method = 'enet',
-                     pred = pred_base_r,
-                     errors = summary_base_r$errors)
+                     pred = pred_enet_r,
+                     errors = summary_enet_r$errors)
 
 write.csv(errors, 'random_enet_errors.csv')
 
@@ -292,8 +290,8 @@ write.csv(summary, 'random_rf_summary.csv')
 errors <- data.frame(name = paste0(name, 'rf'), 
                      covariates = name,
                      method = 'rf',
-                     pred = pred_base_r,
-                     errors = summary_base_r$errors)
+                     pred = pred_rf_r,
+                     errors = summary_rf_r$errors)
 
 write.csv(errors, 'random_rf_errors.csv')
 
@@ -381,11 +379,12 @@ write.csv(summary, 'random_mbg_summary.csv')
 
 
 
+
 errors <- data.frame(name = paste0(name, 'mbg'), 
                      covariates = name,
                      method = 'mbg',
-                     pred = pred_base_r,
-                     errors = summary_base_r$errors)
+                     pred = m1$summary.fitted$mean[1:nrow(pr_inla)][is.na(pr_inla$pf_pos)],
+                     errors = summary_mbg_r$errors)
 
 write.csv(errors, 'random_mbg_errors.csv')
 

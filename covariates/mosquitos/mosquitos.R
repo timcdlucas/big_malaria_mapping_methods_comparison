@@ -309,7 +309,7 @@ summary <- data.frame(name = paste0(name, 'mbg'),
 
 write.csv(summary, 'random_mbg_summary.csv')
 
-write.csv(summary_rf_r$errors, 'random_mbg_errors.csv')
+write.csv(summary_mbg_r$errors, 'random_mbg_errors.csv')
 
 #' next bits
 

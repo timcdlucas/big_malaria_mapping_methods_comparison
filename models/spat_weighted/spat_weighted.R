@@ -84,7 +84,7 @@ covs_clean <-
 
 
 
-#+ inner_cv
+#+ inner_cv, warning = FALSE
 
 inner_holdout <- sample(which(pr$random_holdout == 0), 500)
 Nvec <- c(200, 500, 1000, 2000, 4000)
@@ -119,7 +119,7 @@ for(n in seq_along(Nvec)){
     preds[i] <- predict(this_model, newdata = covs_clean[pr$random_holdout == 1, ][i, ], type = 'response')
   }
   
-  mae[n] <- abs(preds - pr$pf_pr)
+  mae[n] <- mean(abs(preds - pr$pf_pr[inner_holdout]))
 }
 
 
@@ -131,12 +131,11 @@ plot(mae ~ Nvec)
 
 
 
-#+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
+#+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE, warning = FALSE
 
 N <- Nvec[which.min(mae)]
 geo_weight <- FALSE
 preds <- rep(NA, pr$pf_pos[pr$random_holdout == 1] %>% length)
-m <- rep(list(NA), pr$pf_pos[pr$random_holdout == 1] %>% length)
 coefficients <- data.frame(matrix(NA, ncol = ncol(covs_clean) + 1,
                                   nrow = pr$pf_pos[pr$random_holdout == 1] %>% length))
 
@@ -185,7 +184,7 @@ coef_long <- pivot_longer(coefficients_extra,
                           names_to = 'covariate',
                           values_to = 'estimate')
 
-ggplot(coef_long, aes(latitude, longitude, colour = estimate)) +
+ggplot(coef_long, aes(longitude, latitude, colour = estimate)) +
   geom_point() + 
   facet_wrap(~ covariate) +
   scale_colour_viridis_c()
@@ -204,7 +203,7 @@ coef_long <- pivot_longer(coefficients_extra,
                           names_to = 'covariate',
                           values_to = 'estimate')
 
-ggplot(coef_long, aes(latitude, longitude, colour = estimate)) +
+ggplot(coef_long, aes(longitude, latitude, colour = estimate)) +
   geom_point() + 
   facet_wrap(~ covariate) +
   scale_colour_viridis_c()

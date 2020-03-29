@@ -5,7 +5,7 @@
 #'    toc: true
 #'    toc_depth: 2
 #'    keep_tex: true
-#'title: "mbg models"
+#'title: "mbg models with country year"
 #'author: Tim Lucas
 #'fontsize: 8pt
 #'geometry: margin=0.5in
@@ -13,7 +13,7 @@
 
 #+ defs
 
-name <- 'mbg'
+name <- 'mbg_country_year'
 
 #' A fairly standard set of covariates
 #' Monthly data.
@@ -73,11 +73,12 @@ covs_clean <-
   covs_clean %>% 
   mutate(accessibility = log1p(accessibility),
          CHIRPS = log1p(CHIRPS),
-         VIIRS = log1p(VIIRS))
-
-
-#+ setup_parallel, cache= FALSE
-
+         VIIRS = log1p(VIIRS)) %>%
+  mutate(month_start = pr$month_start) %>%
+  mutate(month_startrep = pr$month_start) %>%
+  mutate(year_start = pr$year_start) %>% 
+  mutate(year_startrep = pr$year_start) %>% 
+  mutate(country = as.numeric(factor(pr$country)))
 
 
 
@@ -100,13 +101,9 @@ if(Sys.info()["sysname"] != 'Windows'){
 
 load('../../../data/derived/mesh.RData')
 
-
 pr_inla <- pr
 pr_inla$pf_pos[pr_inla$random_holdout == 1] <- NA
 pr_inla$year_group <- as.numeric(cut(pr_inla$year_start, c(1999, 2005, 2010, 2015, 2030)))
-
-
-
 
 # Define penalised complexity priors for random field. 
 spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, 
@@ -123,12 +120,22 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
 
 
 
-
 #+ fit_mbg_random
 
 fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
 h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
-form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + ', fixed))
+hyper.rw2 <- list(prec = list(prior="pc.prec", param = c(1, 0.01)))
+hyper.country <- list(prec = list(prior="pc.prec", param = c(0.4, 0.01)))
+
+form1 <- 'pf_pos ~ b0 + 0 + '
+form2 <- 'f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + '
+form3 <- 'f(year_start, model="rw2", hyper = hyper.rw2, scale.model = TRUE) + '
+form4 <- 'f(year_startrep, model="rw2", hyper = hyper.country, scale.model = TRUE, replicate = country) + '
+form5 <- 'f(month_start, model="rw2", hyper = hyper.rw2, scale.model = TRUE) + '
+form6 <- 'f(month_startrep, model="rw2", hyper = hyper.country, scale.model = TRUE, replicate = country) + '
+
+
+form <- as.formula(paste(form1, form2, form3, form4, form5, form6, fixed))
 
 
 
@@ -136,7 +143,8 @@ m1 <- inla(form, data = inla.stack.data(stk.env),
            family = 'binomial', 
            Ntrials = pr_inla$examined, 
            control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.env)),
-           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'))
+           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'),
+           num.threads = 3)
 
 
 save(m1, file = 'models/inla1.RData')
@@ -146,16 +154,18 @@ save(m1, file = 'models/inla1.RData')
 
 
 summary_base_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
-                           pr_inla$examined[pr_inla$random_holdout == 1],
-                           m1$summary.fitted$mean[1:nrow(pr_inla)][is.na(pr_inla$pf_pos)],
-                           pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
+                            pr_inla$examined[pr_inla$random_holdout == 1],
+                            m1$summary.fitted$mean[1:nrow(pr_inla)][is.na(pr_inla$pf_pos)],
+                            pr_inla[pr_inla$random_holdout == 1, c('longitude', 'latitude')])
+
+summary_base_r$weighted_mae
 
 summary <- data.frame(name = paste0('base', name), 
                       covariates = 'base',
                       method = name,
                       cv = 'random',
-                      mae = summary_mbg_r$weighted_mae,
-                      correlation = summary_mbg_r$correlation,
+                      mae = summary_base_r$weighted_mae,
+                      correlation = summary_base_r$correlation,
                       time = m1$cpu.used[[2]])
 
 write.csv(summary, 'random_mbg_summary.csv')
@@ -175,7 +185,6 @@ write.csv(errors, 'random_base_errors.csv')
 
 
 
-
 #+ summary_base_random, cache = FALSE
 
 
@@ -187,7 +196,9 @@ kable(m1$summary.hyper)
 
 
 
-
+ggplot(pr, aes(month_start, y = pf_pr, size = examined)) + 
+  geom_point() +
+  geom_smooth()
 
 #' next bits
 

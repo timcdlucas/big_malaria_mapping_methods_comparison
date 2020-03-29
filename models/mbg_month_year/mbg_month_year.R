@@ -5,7 +5,7 @@
 #'    toc: true
 #'    toc_depth: 2
 #'    keep_tex: true
-#'title: "mbg models"
+#'title: "mbg month year models"
 #'author: Tim Lucas
 #'fontsize: 8pt
 #'geometry: margin=0.5in
@@ -13,7 +13,7 @@
 
 #+ defs
 
-name <- 'mbg'
+name <- 'mbg_month_year'
 
 #' A fairly standard set of covariates
 #' Monthly data.
@@ -127,8 +127,17 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
 #+ fit_mbg_random
 
 fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
+
 h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
-form <- as.formula(paste('pf_pos ~ b0 + 0 + f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + ', fixed))
+hyper.month <- list(prec = list(prior="pc.prec", param = c(1, 0.01)))
+hyper.year <- list(prec = list(prior="pc.prec", param = c(0.5, 0.01)))
+
+
+form1 <- 'pf_pos ~ b0 + 0 + '
+form2 <- 'f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + '
+form3 <- ' f(month_start, model="rw2", cyclic = TRUE, hyper=hyper.month, scale.model = TRUE) +'
+form4 <- ' f(year_start, model="rw2", hyper=hyper.year, scale.model = TRUE) +'
+form <- as.formula(paste(form1, form2, form3, fixed))
 
 
 

@@ -20,7 +20,7 @@ name <- 'lf_rf'
 
 #+setup, echo = FALSE, cache = FALSE, results = 'hide'
 
-knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(cache = TRUE, fig.width = 8, fig.height = 5, cache.lazy = FALSE)
 
 set.seed(110120)
 
@@ -35,6 +35,7 @@ library(parallel)
 library(caret)
 library(doParallel)
 library(readr)
+library(knitr)
 
 source('../../helper_functions/summarise.R')
 source('../../helper_functions/extract_year.R')
@@ -89,13 +90,13 @@ lf$Year_start <- as.character(lf$Year_start)
 
 lf <- 
   lf %>% 
-    mutate(Year_start = ifelse(Year_start %in% c(1998, 1999), 2000, Year_start)) %>% 
-    mutate(Examined = as.numeric(Examined),
-           Positive = as.numeric(Positive)) %>% 
-    filter(!is.na(Year_start)) %>% 
-    filter(Year_start >= 2000) %>% 
-    filter(!is.na(Examined), !is.na(Prevalence), !is.na(Positive)) %>% 
-    filter(!is.na(Latitude), !is.na(Longitude))
+  mutate(Year_start = ifelse(Year_start %in% c(1998, 1999), 2000, Year_start)) %>% 
+  mutate(Examined = as.numeric(Examined),
+         Positive = as.numeric(Positive)) %>% 
+  filter(!is.na(Year_start)) %>% 
+  filter(Year_start >= 2000) %>% 
+  filter(!is.na(Examined), !is.na(Prevalence), !is.na(Positive)) %>% 
+  filter(!is.na(Latitude), !is.na(Longitude))
 
 
 dim(lf)
@@ -119,18 +120,18 @@ dd$dist <- distances$ra
 
 close <- 
   dd %>%
-    group_by(V1) %>% 
-    arrange(dist) %>% 
-    slice(1)
+  group_by(V1) %>% 
+  arrange(dist) %>% 
+  slice(1)
 
 rm(distances)
 rm(dd)
 
 
 lf_covs <- covs_clean[close$V2, ] %>% 
-             dplyr::select(-month_start, -year_start) %>% 
-             mutate(month_start = rep(0, nrow(close)),
-                    year_start = as.numeric(lf$Year_start))
+  dplyr::select(-month_start, -year_start) %>% 
+  mutate(month_start = rep(0, nrow(close)),
+         year_start = as.numeric(lf$Year_start))
 
 covs_clean$malaria <- 1
 lf_covs$malaria <- 0
@@ -141,7 +142,7 @@ covs_clean$year_start <- covs_clean$year_start - median(covs_clean$year_start)
 
 pr <- 
   pr %>% 
-    select(latitude, longitude, examined, pf_pos, pf_pr, random_holdout)
+  select(latitude, longitude, examined, pf_pos, pf_pr, random_holdout)
 
 lf <- lf %>% 
   mutate(random_holdout = 0) %>% 
@@ -157,21 +158,49 @@ pr <- bind_rows(pr, lf)
 #+ fit_base_random, cache = TRUE, results = 'hide', message = FALSE
 
 
-N <- 6
+N <- 20
 
 
-m_base_r <- train(y = pr$pf_pr[pr$random_holdout == 0],
-                x = covs_clean[pr$random_holdout == 0, ],
-                method = 'ranger', 
-                weights = pr$examined[pr$random_holdout == 0],
-                tuneLength = N,
-                metric = 'MAE',
-                trControl = trainControl(method = 'cv', number = 3, 
-                                         search = 'random', 
-                                         selectionFunction = 'oneSE',
-                                         allowParallel = FALSE,
-                                         savePredictions = TRUE))
+m <- list()
 
+wts <- rep(c(0.6, 0.8, 1), 2)
+N <- 12
+tuneGrid <- data.frame(mtry = sample(14, N, replace = TRUE), 
+                       splitrule = sample(c("variance", "extratrees", "maxstat"), N, replace = TRUE), 
+                       min.node.size = sample(40, N, replace = TRUE))
+
+split <- 'malaria'
+
+nmalaria <- nrow(covs_clean[pr$random_holdout == 0 & covs_clean$malaria == 1, ])
+holdout <- sample(nmalaria, 7000)
+train <- which(!(seq_len(nrow(covs_clean[pr$random_holdout == 0, ])) %in% holdout))
+
+trCtrl<- 
+  trainControl(indexOut = list(holdout),
+               index = list(train),
+               allowParallel = FALSE,
+               savePredictions = TRUE)
+
+for(i in seq_along(wts)){
+  
+  split <- if(i > (length(wts) / 2)) split <- NULL
+  weight_vec <- pr$examined
+  weight_vec[covs_clean$malaria == 0] <- weight_vec[covs_clean$malaria == 0] * wts[i]
+  
+  m[[i]] <- train(y = pr$pf_pr[pr$random_holdout == 0],
+                  x = covs_clean[pr$random_holdout == 0, ],
+                  method = 'ranger', 
+                  weights = weight_vec[pr$random_holdout == 0],
+                  tuneGrid = tuneGrid,
+                  metric = 'MAE',
+                  trControl = trCtrl,
+                  always.split.variables = 'malaria')
+}
+
+perf <- sapply(m, function(x) x$results$MAE %>% min)
+
+
+m_base_r <- m[[which.min(perf)]]
 save(m_base_r, file = 'models/base_r.RData')
 
 
@@ -179,6 +208,8 @@ save(m_base_r, file = 'models/base_r.RData')
 
 
 #+ summary_base_random, cache = FALSE
+
+plot(perf)
 
 plot(m_base_r$results$MAE ~ m_base_r$results$mtry)
 plot(m_base_r$results$MAE ~ m_base_r$results$min.node.size)
@@ -194,9 +225,9 @@ pred_base_r <- predict(m_base_r, newdata = covs_clean[pr$random_holdout == 1, ])
 
 
 summary_base_r <- summarise(pr$pf_pos[pr$random_holdout == 1], 
-                          pr$examined[pr$random_holdout == 1],
-                          pred_base_r,
-                          pr[pr$random_holdout == 1, c('longitude', 'latitude')])
+                            pr$examined[pr$random_holdout == 1],
+                            pred_base_r,
+                            pr[pr$random_holdout == 1, c('longitude', 'latitude')])
 
 summary <- data.frame(name = paste0('base', name), 
                       covariates = 'base',
@@ -206,6 +237,8 @@ summary <- data.frame(name = paste0('base', name),
                       correlation = summary_base_r$correlation,
                       time = m_base_r$times$everything[[1]])
 
+
+summary_base_r$weighted_mae
 write.csv(summary, 'random_base_summary.csv')
 
 

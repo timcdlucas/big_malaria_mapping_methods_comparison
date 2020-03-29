@@ -90,16 +90,21 @@ K <- 2500
 ncovs = ncol(X)
 
 
-omega <- t(matrix(rnorm(K * ncovs), ncol = ncovs))
-
+# priors
 tau <- exponential(1)
 bw <- gamma(1,1)
 sigma <- gamma(1,1)
-
 W <- normal(0, 1, dim = c(2 * K, 1)) * tau
+
+
+# Do the math
+omega <- t(matrix(rnorm(K * ncovs), ncol = ncovs))
+
 feat <- X %*% (omega * bw)
 
 rff <- sqrt(1 / K) * cbind(sin(feat), cos(feat))
+
+
 mu <- rff %*% W
 prev <- ilogit(mu)
 distribution(Y) <- binomial(examined, prev)

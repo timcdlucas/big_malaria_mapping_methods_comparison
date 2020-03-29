@@ -73,7 +73,8 @@ covs_clean <-
   covs_clean %>% 
   mutate(accessibility = log1p(accessibility),
          CHIRPS = log1p(CHIRPS),
-         VIIRS = log1p(VIIRS)) 
+         VIIRS = log1p(VIIRS)) %>%
+  mutate(month_start = factor(pr$month_start))
 
 
 #+ setup_parallel, cache= FALSE
@@ -107,7 +108,6 @@ pr_inla$year_group <- as.numeric(cut(pr_inla$year_start, c(1999, 2005, 2010, 201
 
 
 
-
 # Define penalised complexity priors for random field. 
 spde <- inla.spde2.pcmatern(mesh = mesh, alpha = 2, 
                             prior.range = c(10, 0.01), prior.sigma = c(0.4, 0.01))
@@ -126,14 +126,12 @@ stk.env <- inla.stack(tag = 'estimation', ## tag
 
 #+ fit_mbg_random
 
-fixed <- paste(names(covs_clean %>% dplyr::select(-contains('start'))), collapse = ' + ')
+fixed <- paste(names(covs_clean %>% dplyr::select(-contains('year'))), collapse = ' + ')
 h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
-hyper.rw2 <- list(prec = list(prior="pc.prec", param = c(0.5, 0.01)))
 
 form1 <- 'pf_pos ~ b0 + 0 + '
 form2 <- 'f(field, model=spde, group = field.group, control.group = list(model="ar1", hyper=h.spec)) + '
-form3 <- ' f(month_start, model="rw2", cyclic = TRUE, hyper=hyper.rw2, scale.model = TRUE) +'
-form <- as.formula(paste(form1, form2, form3, fixed))
+form <- as.formula(paste(form1, form2, fixed))
 
 
 
@@ -141,14 +139,14 @@ m1 <- inla(form, data = inla.stack.data(stk.env),
            family = 'binomial', 
            Ntrials = pr_inla$examined, 
            control.predictor = list(compute = TRUE, link = 1, A = inla.stack.A(stk.env)),
-           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'))
+           control.inla = list(int.strategy = 'eb', strategy = 'gaussian'),
+           num.threads = 8)
 
 
 save(m1, file = 'models/inla1.RData')
 
 
 #+ predict_base_random
-
 
 summary_base_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
                            pr_inla$examined[pr_inla$random_holdout == 1],
@@ -159,9 +157,11 @@ summary <- data.frame(name = paste0('base', name),
                       covariates = 'base',
                       method = name,
                       cv = 'random',
-                      mae = summary_mbg_r$weighted_mae,
-                      correlation = summary_mbg_r$correlation,
+                      mae = summary_base_r$weighted_mae,
+                      correlation = summary_base_r$correlation,
                       time = m1$cpu.used[[2]])
+
+summary_base_r$weighted_mae
 
 write.csv(summary, 'random_mbg_summary.csv')
 
@@ -180,7 +180,6 @@ write.csv(errors, 'random_base_errors.csv')
 
 
 
-
 #+ summary_base_random, cache = FALSE
 
 
@@ -192,7 +191,9 @@ kable(m1$summary.hyper)
 
 
 
-
+ggplot(pr, aes(month_start, y = pf_pr, size = examined)) + 
+  geom_point() +
+  geom_smooth()
 
 #' next bits
 

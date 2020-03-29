@@ -58,13 +58,15 @@ data %>%
   filter(cv == 'random') %>% 
   ggplot(aes(x = fct_reorder(covariates, mae, .fun = min), 
                  fill = method, y = mae)) + 
-    geom_bar(stat = 'identity', position = 'dodge')
+    geom_bar(stat = 'identity', position = 'dodge') +
+    coord_flip()
 
 
 data %>% 
   filter(cv == 'random') %>% 
   ggplot(aes(x = method, fill = covariates, y = mae)) + 
-  geom_bar(stat = 'identity', position = 'dodge')
+  geom_bar(stat = 'identity', position = 'dodge') +
+  coord_flip()
 
 
 
@@ -157,7 +159,7 @@ for(i in seq_along(method_vec)){
     data_mod$p_value[i] <- NA
   } else {
     d <- data_big %>% filter(method %in% c(method_vec[i], best_model))
-    data_mod$p_value[i] <- wtd_mwu(d, errors, method, examined)$p.value
+    data_mod$p_value[i] <- weighted_mannwhitney(d, errors, method, examined)$p.value
   }
 }
 
