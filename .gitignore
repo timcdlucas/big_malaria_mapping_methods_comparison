@@ -10,3 +10,10 @@ archive/
 *.tex
 *.html
 *.DS_Store
+*.so
+*.o
+*.rds
+*.Rmd
+*.spin.*
+*.stan.R
+*.png
