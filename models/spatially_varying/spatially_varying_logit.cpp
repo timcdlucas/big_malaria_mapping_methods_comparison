@@ -1,12 +1,8 @@
 //
-// Author: Anita Nandi
-// Date: 2019-07-24
+// Author: Tim Lucas
+// Date: 2020-03
 //
-// Simple example of a TMB model - linear regression with field
-//
-// Data: prevalence survey data and covariate data
-//
-// The model: prev = invlogit(intercept + x * slope + logit_prevalence_field.array())
+// Spatially varying regression coefficients
 //
 
 #include <TMB.hpp>
