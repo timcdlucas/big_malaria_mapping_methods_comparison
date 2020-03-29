@@ -87,10 +87,15 @@ Type objective_function<Type>::operator()()
   Type covkappa = sqrt(8.0) / covrho;
   
   // Random effect parameters
-  PARAMETER_VECTOR(nodecov);
+  PARAMETER_MATRIX(nodecov);
+  
+  // Number of spatially varying fields
+  int n_covs = nodecov.cols();
+  int n_nodes = nodecov.rows();
   
   // Number of pixels
   int n_points = x.rows();
+  
   
   Type nll = 0.0;
   
@@ -139,8 +144,10 @@ Type objective_function<Type>::operator()()
   Type covscaling_factor = sqrt(exp(lgamma(nu)) / (exp(lgamma(nu + 1)) * 4 * M_PI * pow(covkappa, 2*nu)));
   
   // Likelihood of the random field.
-  nll += SCALE(GMRF(covQ), covsigma / covscaling_factor)(nodecov);
   
+  for (int cov = 0; cov < n_covs; point++) {
+    nll += SCALE(GMRF(covQ), covsigma / covscaling_factor)(nodecov.col(cov));
+  }
   
   
   Type nll_priors = nll;
@@ -157,8 +164,11 @@ Type objective_function<Type>::operator()()
   
   // Calculate field for spatially varying
   vector<Type> logit_cov_field;
-  logit_cov_field = Apixel * nodecov * x.col(0).array();
+  logit_cov_field = Apixel * nodecov.cov(cov).array() * x.col(0).array();
   
+  for (int cov = 1; cov < n_covs; point++) {
+    logit_cov_field = logit_cov_field + Apixel * nodecov.cov(cov).array() * x.col(cov).array();
+  }
   
   // ------------------------------------------------------------------------ //
   // Likelihood from data

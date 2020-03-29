@@ -123,7 +123,7 @@ mesh$n
 spde <- (inla.spde2.matern(mesh, alpha = 2)$param.inla)[c("M0", "M1", "M2")]	
 
 coords <- 
-  pr %>% filter(random_holdout == 0) %>% select(longitude, latitude) %>% as.matrix
+  pr %>% filter(random_holdout == 0) %>% dplyr::select(longitude, latitude) %>% as.matrix
 Apix <- INLA::inla.mesh.project(mesh, loc = coords)$A
 
 
@@ -142,11 +142,11 @@ parameters <- list(intercept = -5,
                    nodemean = rep(0, nrow(spde$M0)),
                    log_covsigma = 0,
                    log_covrho = 4,
-                   nodecov = rep(0, nrow(spde$M0))
+                   nodecov = matrix(0, nrow = nrow(spde$M0), ncol = 2)
                    
 )
 
-input_data <- list(x = as.matrix(covs_clean[pr$random_holdout == 0, ]),
+input_data <- list(x = as.matrix(covs_clean[pr$random_holdout == 0, 1:2]),
                    Apixel = Apix,
                    spde = spde,
                    positive_cases = pr$pf_pos[pr$random_holdout == 0],
@@ -243,7 +243,7 @@ cbind(pr,
   geom_point()
 
 
-#+ predict_base_random
+#+ predict_base_random, eval = FALSE
 
 
 summary_base_r <- summarise(pr$pf_pos[pr_inla$random_holdout == 1], 
@@ -276,7 +276,7 @@ write.csv(errors, 'random_base_errors.csv')
 
 
 
-#+ summary_base_random, cache = FALSE
+#+ summary_base_random, cache = FALSE, eval = FALSE
 
 
 autoplot(m1)
